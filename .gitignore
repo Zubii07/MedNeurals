@@ -1,0 +1,76 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+*.egg-info/
+dist/
+build/
+
+# Node.js / frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+.pnp.*
+coverage/
+.next/
+out/
+dist/
+build/
+
+# Local databases and application output
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+tmp/
+temp/
+
+# Editors and operating system files
+.vscode/*
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ML model artifacts
+backend/app/ml/trained/*.joblib
+backend/app/ml/trained/*.pkl
+backend/app/ml/trained/*.json
+
+# Local datasets
+data/raw/
+data/processed/
+data/sample/*.csv
+
+# Jupyter / Colab
+.ipynb_checkpoints/
+
+# Optional local uploads
+uploads/
