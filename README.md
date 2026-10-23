@@ -1,4 +1,4 @@
-# MedNeurals
+﻿# MedNeurals
 
 AI-assisted hospital procurement decision-support system for forecasting demand, identifying stockout risk, analyzing supplier performance, and generating procurement recommendations.
 
@@ -135,7 +135,7 @@ pip install -r requirements.txt
 Create a PostgreSQL database named:
 
 ```text
-hospital_procurement
+MedNeurals
 ```
 
 Example local connection settings:
@@ -158,13 +158,33 @@ backend/.env
 Example:
 
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/hospital_procurement
+DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/MedNeurals
 JWT_SECRET=YOUR_SECRET_KEY
 JWT_ALGORITHM=HS256
 LLM_API_KEY=YOUR_API_KEY
 ```
 
 Never commit `.env` to Git.
+
+### Phase 1 backend checks
+
+From the `backend` directory, start the API:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Then check:
+
+- `GET http://127.0.0.1:8000/health` returns `{"status":"ok"}`.
+- `GET http://127.0.0.1:8000/health/db` returns a connected status when PostgreSQL is available.
+
+Alembic uses the same `DATABASE_URL` from `.env`. With no business models yet, there are no migrations to generate:
+
+```bash
+alembic current
+alembic check
+```
 
 ## Model Artifacts
 
@@ -229,3 +249,4 @@ The backend loads these models for inference only. Model training is performed s
 ## License
 
 For academic / Final Year Project use.
+
