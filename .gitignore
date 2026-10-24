@@ -63,6 +63,7 @@ Desktop.ini
 backend/app/ml/trained/*.joblib
 backend/app/ml/trained/*.pkl
 backend/app/ml/trained/*.json
+backend/app/ml/trained/*.csv
 
 # Local datasets
 data/raw/
