@@ -76,3 +76,6 @@ backend/data/MedNeurals_dataset_v2/*
 
 # Optional local uploads
 uploads/
+
+# CSV import rejected-row reports
+backend/import_reports/

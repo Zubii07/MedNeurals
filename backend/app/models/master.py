@@ -57,7 +57,6 @@ class Store(Base):
     description: Mapped[str | None] = mapped_column(Text)
 
     hospital: Mapped["Hospital"] = relationship(back_populates="stores")
-    items: Mapped[list["MedicalItem"]] = relationship(back_populates="store")
 
 
 class Department(Base):

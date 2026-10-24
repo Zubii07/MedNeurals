@@ -40,3 +40,22 @@ FROM demand WHERE demand_date <= :cutoff
 - purchase_orders.csv → `purchase_orders`: `purchase_order_id`, `supplier_id`, `item_id`, `order_date`, `expected_delivery_date`, `receipt_date`, `lead_time_days`, `ordered_packs`, `ordered_quantity`, `accepted_quantity`, `unit_price_per_pack`, `is_emergency`, `premium_pct`, `status`, `line_amount_pkr`
 - stock_transfers.csv → `stock_transfers`: `transfer_date`, `from_store_id`, `to_store_id`, `item_id`, `requested_qty`, `shipped_qty`, `arrival_date`
 - stockout_events.csv → `stockout_events`: `stockout_event_id`, `store_id`, `item_id`, `start_date`, `end_date`, `duration_days`, `shortfall_qty`, `cause`, `severity`
+
+## Import (Phase 3)
+Code: `app/services/csv_import.py`. Entry points: `python -m scripts.import_csv --all [--cutoff YYYY-MM-DD]`
+(run from `backend/`) and `POST /data/import` (multipart: `dataset`, `file`, optional `cutoff`).
+
+- **Order:** hospitals, categories, units_of_measure, **stores, departments** (departments.primary_store_id → stores),
+  medical_items, suppliers, supplier_items, item_department_usage, calendar, demand, daily_inventory,
+  purchase_orders, stock_transfers, stockout_events.
+- **Validation (pandas):** required headers; required values; dates; Y/N and 0/1 flags; numbers ≥ 0 and whole numbers
+  for integer columns; string length; FK ids exist in the DB; duplicate unique keys inside the file (first copy kept);
+  date order (end ≥ start, arrival ≥ transfer, expected/receipt ≥ order, contract end ≥ start).
+  Rejected rows are written to `import_reports/<upload_id>_<dataset>_rejected.csv` with `row_number` and `reject_reason`.
+- **Load:** COPY into a temp table, then `INSERT … ON CONFLICT`. DO UPDATE (changed rows only) for master tables
+  and purchase_orders; DO NOTHING for calendar, demand, daily_inventory, stock_transfers, stockout_events.
+- **Cutoff:** rows dated after the cutoff are skipped (`uploads.rows_skipped`), by `demand_date`, `date`,
+  `order_date`, `transfer_date`, `start_date`. Masters and calendar ignore it. Purchase orders received after the
+  cutoff are stored as they were on the cutoff (`status='Open'`, no receipt_date/lead_time_days, accepted_quantity 0);
+  re-importing purchase_orders.csv later updates them to Received.
+- Every import is a row in `uploads` (status `completed` / `partial` (some rows rejected) / `failed`).
