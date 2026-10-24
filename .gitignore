@@ -68,6 +68,7 @@ backend/app/ml/trained/*.json
 data/raw/
 data/processed/
 data/sample/*.csv
+backend/data/MedNeurals_dataset_v2/*
 
 # Jupyter / Colab
 .ipynb_checkpoints/
