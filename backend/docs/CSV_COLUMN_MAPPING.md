@@ -59,3 +59,18 @@ Code: `app/services/csv_import.py`. Entry points: `python -m scripts.import_csv 
   cutoff are stored as they were on the cutoff (`status='Open'`, no receipt_date/lead_time_days, accepted_quantity 0);
   re-importing purchase_orders.csv later updates them to Received.
 - Every import is a row in `uploads` (status `completed` / `partial` (some rows rejected) / `failed`).
+
+## Runtime feature inputs (Phase 5)
+Code: `app/services/feature_inputs.py`. `load_feature_inputs(conn, data_cutoff_date)` returns the source DataFrames for
+`app/ml/features.py`; every query reads only rows dated on or before the prediction date (latest Monday ≤ cutoff).
+
+| Query | Feeds | Columns returned |
+|---|---|---|
+| `demand_history` | `build_weekly_demand` | `Demand_Date`, `Store_ID`, `Item_ID`, `Demand_Quantity` |
+| `inventory_history` | `build_stockout_snapshots(inventory)` | `date`, `store_id`, `item_id`, `demand_qty`, `closing_qty`, `on_order_qty`, `is_stockout` (0/1) |
+| `transfer_history` | `build_stockout_snapshots(transfers)` | `transfer_date`, `to_store_id`, `item_id`, `shipped_qty` |
+| `purchase_order_history` | `build_stockout_snapshots(purchase_orders)` | `purchase_order_id`, `supplier_id`, `item_id`, `order_date`, `expected_delivery_date`, `receipt_date`, `lead_time_days`, `ordered_quantity`, `is_emergency` (0/1) |
+| `supplier_item_list` | `build_stockout_snapshots(supplier_items)` | `Item_ID`, `Supplier_ID`, `Preferred_Supplier_Flag` (Y/N) |
+
+Purchase orders: only `order_date ≤ prediction date`; a receipt after the prediction date is returned as NULL
+`receipt_date` / `lead_time_days` (the PO was still open then). Check: `python -m scripts.check_feature_inputs --cutoff 2025-11-30`.
