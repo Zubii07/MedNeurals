@@ -11,7 +11,10 @@ from sqlalchemy.engine import Connection
 
 
 def prediction_date_for(data_cutoff_date: datetime.date) -> datetime.date:
-    """Latest Monday on or before the data cutoff (CLAUDE.md rule 5)."""
+    """The as-of date of a prediction run (CLAUDE.md rule 5): the data cutoff itself when it is a Sunday (the end of a
+    complete week, so the forecast starts the next Monday), otherwise the latest Monday on or before the cutoff."""
+    if data_cutoff_date.weekday() == 6:
+        return data_cutoff_date
     return data_cutoff_date - datetime.timedelta(days=data_cutoff_date.weekday())
 
 

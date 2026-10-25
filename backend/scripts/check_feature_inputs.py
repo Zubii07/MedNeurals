@@ -38,11 +38,11 @@ def main() -> None:
     print(f"  open POs at prediction date: {po['receipt_date'].isna().sum()}")
 
     weekly = build_weekly_demand(inputs["demand"])
-    assert weekly["week_start"].max() + pd.Timedelta(days=6) < as_of, "incomplete demand week"
+    assert weekly["week_start"].max() + pd.Timedelta(days=6) <= as_of, "incomplete demand week"
     print(f"weekly demand: {len(weekly):,} rows, weeks {weekly['week_start'].min().date()} .. {weekly['week_start'].max().date()}")
 
     snaps = build_stockout_snapshots(inputs["inventory"], inputs["transfers"], inputs["purchase_orders"],
-                                     inputs["supplier_items"], with_label=False)
+                                     inputs["supplier_items"], snapshot_weekday=as_of.dayofweek, with_label=False)
     latest = snaps[snaps["date"] == as_of]
     assert snaps["date"].max() == as_of, f"latest snapshot {snaps['date'].max()} is not the prediction date"
     print(f"stockout snapshots: {len(snaps):,} rows, latest {as_of.date()}: {len(latest):,} store-items")

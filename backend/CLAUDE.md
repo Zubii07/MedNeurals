@@ -23,7 +23,9 @@ FastAPI · PostgreSQL · SQLAlchemy 2 · Alembic · pandas · scikit-learn · jo
 3. **ML only for demand forecasting and stockout risk.** Supplier statistics, safety stock, reorder point, recommended
    quantity, action and priority are formulas/rules.
 4. **Advisory only.** Never place purchase orders automatically. Recommendations need an officer's Accept/Adjust/Reject.
-5. **Prediction date = latest Monday on or before the data cutoff** (`cutoff - timedelta(days=cutoff.weekday())`), never "today".
+5. **Prediction date = the data cutoff if it is a Sunday, otherwise the latest Monday on or before it**
+   (`prediction_date_for` in `app/services/feature_inputs.py`), never "today". The forecast starts from the last complete
+   Mon–Sun week on or before it, so a Sunday cutoff (end of an uploaded week) forecasts the next 4 weeks.
 6. **No future data** in any feature: only rows dated on or before the prediction date.
 7. **Do not invent columns.** Inspect the CSV headers in `data/MedNeurals_dataset_v2/` before writing models or imports.
 8. **The LLM (later phase) only explains stored results.** It never produces forecasts, probabilities, quantities or priorities.
