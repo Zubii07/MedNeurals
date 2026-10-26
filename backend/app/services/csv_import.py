@@ -11,7 +11,20 @@ from pathlib import Path
 from typing import IO, Any
 
 import pandas as pd
-from sqlalchemy import Boolean, Date, Engine, Float, Integer, Numeric, Table, UniqueConstraint, insert, select, text, update
+from sqlalchemy import (
+    Boolean,
+    Date,
+    Engine,
+    Float,
+    Integer,
+    Numeric,
+    Table,
+    UniqueConstraint,
+    insert,
+    select,
+    text,
+    update,
+)
 
 from app.models import (
     CalendarDay,
@@ -194,7 +207,7 @@ def validate(
             value = raw
             length = getattr(col.type, "length", None)
             if length:
-                too_long = present & raw.map(lambda v: len(str(v)) > length).astype(bool)
+                too_long = present & raw.map(lambda v, limit=length: len(str(v)) > limit).astype(bool)
                 reject(too_long, f"{col.name}: longer than {length}")
 
         if not col.nullable:

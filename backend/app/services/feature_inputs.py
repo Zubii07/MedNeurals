@@ -5,6 +5,7 @@ aliases to give back the original CSV names. Every query takes an `as_of` date a
 """
 
 import datetime
+
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Connection

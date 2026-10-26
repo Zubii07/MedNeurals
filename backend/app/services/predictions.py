@@ -6,7 +6,12 @@ import pandas as pd
 from sqlalchemy.engine import Connection
 
 from app.ml.artifacts import ModelArtifacts, get_artifacts
-from app.ml.features import build_stockout_snapshots, build_weekly_demand, forecast, stockout_probability
+from app.ml.features import (
+    build_stockout_snapshots,
+    build_weekly_demand,
+    forecast,
+    stockout_probability,
+)
 from app.services.feature_inputs import load_feature_inputs
 
 RISK_URGENT = "URGENT"   # probability >= threshold_urgent
