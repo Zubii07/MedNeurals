@@ -74,3 +74,15 @@ Code: `app/services/feature_inputs.py`. `load_feature_inputs(conn, data_cutoff_d
 
 Purchase orders: only `order_date ≤ prediction date`; a receipt after the prediction date is returned as NULL
 `receipt_date` / `lead_time_days` (the PO was still open then). Check: `python -m scripts.check_feature_inputs --cutoff 2025-11-30`.
+
+## Supplier statistics (Phase 8)
+Code: `app/services/supplier_stats.py`, endpoint `GET /suppliers/{supplier_id}/performance?as_of=&include_emergency=`.
+Source: `purchase_orders` only (one row per PO line, one receipt per line). Formulas, no ML.
+
+- Included in the metrics: `status='Received'` with `receipt_date` ≤ `as_of`. Open orders, receipts after `as_of`,
+  cancelled/other statuses and Received rows without `receipt_date` are only counted. Emergency POs are excluded by
+  default (expedited, ~2-day lead time).
+- Lead time = `receipt_date − order_date` (days): mean, median, sample std dev (n−1, needs ≥ 2 orders), min, max.
+- On-time rate = share of included orders with `receipt_date ≤ expected_delivery_date`; delayed = the rest.
+- Fill rate = Σ min(`accepted_quantity`, `ordered_quantity`) / Σ `ordered_quantity`; partial = accepted < ordered.
+- A metric without data is `null` and listed in `unavailable` with the reason.
