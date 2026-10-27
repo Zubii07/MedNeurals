@@ -6,6 +6,7 @@ Both .joblib files are plain dicts saved by the Colab notebook:
                                      "threshold_urgent", "model_name", "version", "metrics"}
 """
 
+import hashlib
 import json
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ TRAINED_DIR = Path(__file__).parent / "trained"
 DEMAND_FILE = "demand_forecast_pipeline.joblib"
 STOCKOUT_FILE = "stockout_pipeline.joblib"
 METRICS_FILE = "metrics.json"
+FEATURES_FILE = Path(__file__).parent / "features.py"
 
 # UBJSON key "Model" inside a pickled XGBoost booster ({"Config": {...}, "Model": {...}}).
 _UBJSON_MODEL_KEY = b"L" + (5).to_bytes(8, "big") + b"Model{"
@@ -30,6 +32,7 @@ class ModelArtifacts:
     demand: dict
     stockout: dict
     trained_on: str | None
+    feature_version: str        # hash of app/ml/features.py, the feature code both models were run with
 
     @property
     def demand_model_name(self) -> str:
@@ -115,7 +118,13 @@ def load_artifacts(trained_dir: Path = TRAINED_DIR) -> ModelArtifacts:
             if metrics["stockout"][key] != stockout[key]:
                 raise RuntimeError(f"{METRICS_FILE} stockout.{key}={metrics['stockout'][key]} "
                                    f"differs from {STOCKOUT_FILE} ({stockout[key]})")
-    return ModelArtifacts(demand=demand, stockout=stockout, trained_on=trained_on)
+    return ModelArtifacts(demand=demand, stockout=stockout, trained_on=trained_on, feature_version=feature_version())
+
+
+def feature_version() -> str:
+    """First 12 hex digits of the SHA-256 of features.py (line endings normalised, so a CRLF checkout matches)."""
+    source = FEATURES_FILE.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(source).hexdigest()[:12]
 
 
 @lru_cache(maxsize=1)

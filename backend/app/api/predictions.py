@@ -1,11 +1,32 @@
 import datetime
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import text
 from app.database.connection import engine
-from app.schemas.predictions import PredictionPreview
+from app.schemas.predictions import PredictionPreview, PredictionStatus
+from app.services.model_runs import latest_completed_run_id, latest_data_cutoff, refresh_predictions, run_status
 from app.services.predictions import PredictionError, predict, RISK_LOW, RISK_REVIEW, RISK_URGENT
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
+
+
+@router.post("/refresh", response_model=PredictionStatus)
+def refresh() -> PredictionStatus:
+    """Run both models on the latest data cutoff and save the results as new model runs (earlier runs are kept)."""
+    try:
+        stockout_run_id = refresh_predictions(engine)
+    except PredictionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    with engine.connect() as conn:
+        return PredictionStatus(**run_status(conn, stockout_run_id))
+
+
+@router.get("/status", response_model=PredictionStatus)
+def status() -> PredictionStatus:
+    """The latest successful prediction refresh. Failed or running refreshes are not reported here."""
+    with engine.connect() as conn:
+        run_id = latest_completed_run_id(conn)
+        if run_id is None:
+            raise HTTPException(status_code=404, detail="no successful prediction run yet; call POST /predictions/refresh")
+        return PredictionStatus(**run_status(conn, run_id))
 
 
 @router.get("/preview", response_model=PredictionPreview)
@@ -17,7 +38,7 @@ def preview_predictions(
     """Run both models on the DB data up to the cutoff and return the results."""
     with engine.connect() as conn:
         if data_cutoff is None:
-            data_cutoff = conn.execute(text("SELECT max(date) FROM daily_inventory")).scalar()
+            data_cutoff = latest_data_cutoff(conn)
             if data_cutoff is None:
                 raise HTTPException(status_code=400, detail="no inventory data in the database")
         try:

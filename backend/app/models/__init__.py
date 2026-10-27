@@ -10,6 +10,7 @@ from app.models.master import (
     SupplierItem,
     UnitOfMeasure,
 )
+from app.models.predictions import ForecastPrediction, ModelRun, StockoutPrediction
 from app.models.transactions import DailyInventory, Demand, PurchaseOrder, StockoutEvent, StockTransfer
 from app.models.upload import Upload
 
@@ -19,12 +20,15 @@ __all__ = [
     "DailyInventory",
     "Demand",
     "Department",
+    "ForecastPrediction",
     "Hospital",
     "ItemDepartmentUsage",
     "MedicalItem",
+    "ModelRun",
     "PurchaseOrder",
     "StockTransfer",
     "StockoutEvent",
+    "StockoutPrediction",
     "Store",
     "Supplier",
     "SupplierItem",

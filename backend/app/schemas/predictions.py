@@ -9,6 +9,27 @@ class ModelInfo(BaseModel):
     model_version: str
 
 
+class ModelRunInfo(ModelInfo):
+    model_run_id: int
+    feature_version: str
+    status: str                     # running / completed / failed
+    prediction_count: int           # prediction rows saved for this run
+    started_at: datetime.datetime
+    completed_at: datetime.datetime | None
+
+
+class PredictionStatus(BaseModel):
+    """One prediction refresh: a demand_forecast run and the stockout run that used its forecast."""
+    status: str
+    data_cutoff_date: datetime.date
+    prediction_date: datetime.date
+    completed_at: datetime.datetime | None
+    forecast_count: int
+    stockout_count: int
+    demand_forecast: ModelRunInfo
+    stockout: ModelRunInfo
+
+
 class StockoutThresholds(BaseModel):
     review: float
     urgent: float
