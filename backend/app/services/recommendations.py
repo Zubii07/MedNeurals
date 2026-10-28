@@ -8,7 +8,8 @@ Inputs, all as known on the run's prediction date P (never later data):
 - preferred supplier, its MOQ (packs) and the item's pack size; lead time mean / std of the supplier's routine orders
   received by P (Phase 8 compute_performance)
 
-An item whose inputs are incomplete gets no row; it is reported as skipped with the reason. A run's set is written once
+An item whose inputs are incomplete gets no row; it is reported as skipped with the reason (in the response only:
+the schema has no table for skips). A run's set is written once
 and never changed; generating again for the same run returns the existing set.
 """
 
@@ -62,7 +63,7 @@ class Inputs:
                                        # ordered_quantity, status
 
 
-# ---------------------------------------------------------------- reasons
+# ---------------------------------------------------------------- reasons (short, plain language; numbers in details)
 
 def _n(x: float) -> str:
     return f"{x:,.0f}"
@@ -72,67 +73,60 @@ def _units(qty: int) -> str:
     return "unit" if qty == 1 else "units"
 
 
-def purchase_reason(ip, on_hand, on_order, rop, target, qty, packs, pack, moq_packs, moq_applied, prob, store,
-                    review, horizon_days) -> str:
-    stock = f"Inventory position {_n(ip)} ({_n(on_hand)} on hand + {_n(on_order)} on order)"
+def purchase_reason(ip, rop, target, qty, packs, pack, moq_packs, moq_applied, n_transfers) -> str:
     if ip < rop:
-        text_ = f"{stock} is below the reorder point {_n(rop)}; order {_n(qty)} units to reach the order-up-to level {_n(target)}"
+        why = f"Stock plus open orders ({_n(ip)}) is below the reorder point ({_n(rop)})."
     else:
-        text_ = (f"{stock} is above the reorder point {_n(rop)} but below the order-up-to level {_n(target)} "
-                 f"(reorder point + {rules.REVIEW_PERIOD_DAYS} days of demand); order {_n(qty)} units")
-    text_ += f" = {packs} packs of {pack}" + (f" (supplier minimum {moq_packs} packs)" if moq_applied else "") + "."
-    if prob >= review:
-        text_ += f" Highest sub-store stockout risk: {prob:.2f} at {store} within {horizon_days} days."
+        why = f"Stock plus open orders ({_n(ip)}) will not last until the next weekly review (target {_n(target)})."
+    text_ = f"{why} Order {_n(qty)} {_units(qty)} ({packs} packs of {pack}"
+    text_ += f", supplier minimum {moq_packs} packs)." if moq_applied else ")."
+    if n_transfers:
+        text_ += f" Transfers to {n_transfers} at-risk sub-store(s) are listed separately."
     return text_
 
 
-def expedite_reason(prob, store, horizon_days, po, prediction_date) -> str:
+def expedite_reason(at_risk_need, central, po, prediction_date, n_transfers) -> str:
     expected = po["expected_delivery_date"].date()
     days = (expected - prediction_date).days
-    when = f"was due on {expected} ({-days} days overdue)" if days < 0 else f"is expected on {expected} (in {days} days)"
-    return (f"Central stock is 0 and {store} has a {prob:.2f} stockout risk within {horizon_days} days; "
-            f"open PO {po['purchase_order_id']} for {_n(po['ordered_quantity'])} units {when}. Ask the supplier to expedite it.")
-
-
-def transfer_reason(store, prob, horizon_days, on_hand, in_transit, p90, need, qty, central, total_need, total_qty,
-                    first_po=None) -> str:
-    text_ = (f"{store} has a {prob:.2f} stockout risk within {horizon_days} days: stock {_n(on_hand)} + {_n(in_transit)} in "
-             f"transit is below the {horizon_days}-day P90 forecast {_n(p90)}. Transfer {_n(qty)} {_units(qty)} from the central "
-             f"store ({_n(central)} on hand).")
-    if total_qty < total_need:
-        text_ += f" Central stock covers only {_n(total_qty)} of the {_n(total_need)} units needed by at-risk sub-stores."
-        if first_po is not None:
-            text_ += (f" Open PO {first_po['purchase_order_id']} ({_n(first_po['ordered_quantity'])} units, expected "
-                      f"{first_po['expected_delivery_date'].date()}) could be expedited for the rest.")
-    elif qty < need:
-        text_ += f" {_n(need - qty)} units of this store's need remain uncovered."
+    when = f"was due on {expected}, {-days} days ago" if days < 0 else f"is expected on {expected}"
+    text_ = (f"At-risk sub-stores need {_n(at_risk_need)} units soon but the central store has {_n(central)}. "
+             f"Ask the supplier to expedite open order {po['purchase_order_id']} ({_n(po['ordered_quantity'])} units), "
+             f"which {when}.")
+    if n_transfers:
+        text_ += " Transfer the central stock that is available (listed separately)."
     return text_
 
 
-def none_reason(ip, target, prob, store, review, central, open_po_count, transfer_need) -> str:
-    covered = f"Inventory position {_n(ip)} covers the order-up-to level {_n(target)}"
+def transfer_reason(store, prob, horizon_days, on_hand, in_transit, p90, need, qty) -> str:
+    text_ = (f"{store} may run out within {horizon_days} days (risk {prob:.0%}): its stock ({_n(on_hand + in_transit)} "
+             f"incl. in transit) is below expected demand ({_n(p90)}). Transfer {_n(qty)} {_units(qty)} from the central store.")
+    if qty < need:
+        text_ += f" Central stock covers only {_n(qty)} of the {_n(need)} needed."
+    return text_
+
+
+def none_reason(ip, target, prob, store, review, at_risk_need) -> str:
+    covered = f"Stock plus open orders ({_n(ip)}) covers expected demand (target {_n(target)})"
     if prob < review:
-        return f"{covered} and no sub-store stockout risk reaches the review threshold ({prob:.3f} < {review})."
-    if transfer_need <= 0:
-        return (f"{covered}. {store} has a {prob:.2f} stockout risk, but sub-store stock and stock in transit already "
-                f"cover their P90 forecast; no action needed.")
-    return (f"{covered}. {store} has a {prob:.2f} stockout risk, but the central store is empty and no PO is open "
-            f"({central} on hand, {open_po_count} open POs); review manually.")
+        return f"{covered} and no sub-store is at risk of running out."
+    if at_risk_need <= 0:
+        return f"{covered}. {store} shows some stockout risk ({prob:.0%}), but its stock already covers expected demand."
+    return f"{covered}. {store} is at risk ({prob:.0%}), but the central store is empty and no order is open; review manually."
 
 
 # ---------------------------------------------------------------- calculation
 
-def build_recommendations(inputs: Inputs, z_by_ved: dict[str, float] = rules.Z_BY_VED) -> tuple[list[dict], list[dict]]:
+def build_recommendations(inputs: Inputs) -> tuple[list[dict], list[dict]]:
     """Pure pandas: (rows for `recommendations` without run columns, skipped [{item_id, reason}])."""
     P = inputs.prediction_date
     required = set(rules.FORECAST_HORIZONS)
     forecast_days = 7 * len(required)
-    item_horizons = inputs.forecasts.groupby("item_id")["horizon"].agg(set)
     transfer_weeks = math.ceil(inputs.horizon_days / 7)
 
-    fc_item = inputs.forecasts.groupby("item_id")[["p50", "p90"]].sum()
-    fc_store = (inputs.forecasts[inputs.forecasts["horizon"] <= transfer_weeks]
-                .groupby(["store_id", "item_id"])["p90"].sum())
+    forecasts = inputs.forecasts[inputs.forecasts["store_id"] != CENTRAL_STORE]     # demand happens at sub-stores
+    item_horizons = forecasts.groupby("item_id")["horizon"].agg(set)
+    fc_item = forecasts.groupby("item_id")[["p50", "p90"]].sum()
+    fc_store = forecasts[forecasts["horizon"] <= transfer_weeks].groupby(["store_id", "item_id"])["p90"].sum()
     stockout = inputs.stockout.sort_values(["item_id", "probability", "store_id"], ascending=[True, False, True])
     stock = inputs.stock.set_index(["store_id", "item_id"])["closing_qty"]
     in_transit = inputs.in_transit.set_index(["store_id", "item_id"])["in_transit_qty"]
@@ -163,12 +157,14 @@ def build_recommendations(inputs: Inputs, z_by_ved: dict[str, float] = rules.Z_B
             skip(f"supplier {item.supplier_id} has no completed routine orders by {P} (no lead time)"); continue
         if pd.isna(lead.at[item.supplier_id, "lead_time_std"]):
             skip(f"supplier {item.supplier_id} has fewer than 2 completed routine orders by {P} (no lead-time variability)"); continue
-        if item.ved_class not in z_by_ved:
+        if item.ved_class not in rules.Z_BY_VED:
             skip(f"unknown VED class {item.ved_class!r}"); continue
+        if pd.isna(item.pack_size) or item.pack_size < 1:
+            skip(f"invalid pack size {item.pack_size!r} in medical_items"); continue
         if (CENTRAL_STORE, item_id) not in stock.index:
             skip(f"no central-store inventory snapshot on {P}"); continue
 
-        z = z_by_ved[item.ved_class]
+        z = rules.Z_BY_VED[item.ved_class]
         L = float(lead.at[item.supplier_id, "lead_time"])
         sL = float(lead.at[item.supplier_id, "lead_time_std"])
         d = rules.daily_demand(fc_item.at[item_id, "p50"], forecast_days)
@@ -180,26 +176,28 @@ def build_recommendations(inputs: Inputs, z_by_ved: dict[str, float] = rules.Z_B
         item_po = po_by_item.get(item_id, po.iloc[0:0])
         on_order = int(item_po["ordered_quantity"].sum())
         ip = rules.inventory_position(central, on_order)
-        pack = int(item.pack_size) if pd.notna(item.pack_size) and item.pack_size >= 1 else 1
+        pack = int(item.pack_size)
         moq = int(item.moq_packs) if pd.notna(item.moq_packs) else None
         top = item_risk.iloc[0]
         prob, top_store = float(top["probability"]), top["store_id"]
 
-        # at-risk sub-stores, highest probability first, and what central stock can give them
-        at_risk = item_risk[item_risk["probability"] >= inputs.threshold_review]
+        # at-risk sub-stores (highest probability first) and what central stock can give them
         needs = []
-        for r in at_risk.itertuples():
+        for r in item_risk[item_risk["probability"] >= inputs.threshold_review].itertuples():
             key = (r.store_id, item_id)
-            on_hand, transit = int(stock.get(key, 0)), int(in_transit.get(key, 0))
+            if key not in stock.index:
+                skip(f"no inventory snapshot for sub-store {r.store_id} on {P}; no transfer calculated for it"); continue
+            on_hand, transit = int(stock.at[key]), int(in_transit.get(key, 0))     # no shipment row = nothing in transit
             p90 = float(fc_store.get(key, 0.0))
             needs.append((r.store_id, float(r.probability), on_hand, transit, p90,
                           rules.store_transfer_need(p90, on_hand, transit)))
-        total_need = sum(n[-1] for n in needs)
+        at_risk_need = sum(n[-1] for n in needs)
+        allocated = rules.allocate_transfers(central, [n[-1] for n in needs])
+        transfers = [(n, qty) for n, qty in zip(needs, allocated) if qty > 0]
 
-        action = rules.decide_action(ip, target, prob, inputs.threshold_review, central, len(item_po), total_need)
         base = {
             "item_id": item_id, "supplier_id": item.supplier_id, "store_id": None, "purchase_order_id": None,
-            "action": action, "ved_class": item.ved_class, "z_value": z, "forecast_p50": d, "demand_std": sd,
+            "ved_class": item.ved_class, "z_value": z, "forecast_p50": d, "demand_std": sd,
             "lead_time": L, "lead_time_std": sL,
             "lead_time_sample_size": int(lead.at[item.supplier_id, "lead_time_sample_size"]),
             "current_stock": central, "on_order_qty": on_order, "open_po_count": len(item_po),
@@ -209,30 +207,25 @@ def build_recommendations(inputs: Inputs, z_by_ved: dict[str, float] = rules.Z_B
             "priority": rules.priority(prob, inputs.threshold_review, inputs.threshold_urgent, item.ved_class, ip, rop),
         }
 
+        action = rules.item_action(ip, target, at_risk_need, central, len(item_po), bool(transfers))
         if action == ACTION_PURCHASE:
             qty, packs, moq_applied = rules.purchase_quantity(target, ip, pack, moq)
-            rows.append({**base, "recommended_quantity": qty, "reason": purchase_reason(
-                ip, central, on_order, rop, target, qty, packs, pack, moq, moq_applied, prob, top_store,
-                inputs.threshold_review, inputs.horizon_days)})
+            rows.append({**base, "action": action, "recommended_quantity": qty, "reason": purchase_reason(
+                ip, rop, target, qty, packs, pack, moq, moq_applied, len(transfers))})
         elif action == ACTION_EXPEDITE:
             first = item_po.iloc[0]
-            rows.append({**base, "purchase_order_id": first["purchase_order_id"],
-                         "reason": expedite_reason(prob, top_store, inputs.horizon_days, first, P)})
-        elif action == ACTION_TRANSFER:
-            allocated = rules.allocate_transfers(central, [n[-1] for n in needs])
-            total_qty = sum(allocated)
-            for (store, p, on_hand, transit, p90, need), qty in zip(needs, allocated):
-                if qty <= 0:
-                    continue
-                rows.append({**base, "store_id": store, "stockout_probability": p, "transfer_qty": qty,
-                             "priority": rules.priority(p, inputs.threshold_review, inputs.threshold_urgent,
-                                                        item.ved_class, ip, rop),
-                             "reason": transfer_reason(store, p, inputs.horizon_days, on_hand, transit, p90, need, qty,
-                                                       central, total_need, total_qty,
-                                                       item_po.iloc[0] if len(item_po) else None)})
-        else:
-            rows.append({**base, "action": ACTION_NONE, "reason": none_reason(
-                ip, target, prob, top_store, inputs.threshold_review, central, len(item_po), total_need)})
+            rows.append({**base, "action": action, "purchase_order_id": first["purchase_order_id"],
+                         "reason": expedite_reason(at_risk_need, central, first, P, len(transfers))})
+        elif action == ACTION_NONE:
+            rows.append({**base, "action": action,
+                         "reason": none_reason(ip, target, prob, top_store, inputs.threshold_review, at_risk_need)})
+
+        for (store, p, on_hand, transit, p90, need), qty in transfers:
+            rows.append({**base, "action": ACTION_TRANSFER, "store_id": store, "stockout_probability": p,
+                         "transfer_qty": qty,
+                         "priority": rules.priority(p, inputs.threshold_review, inputs.threshold_urgent,
+                                                    item.ved_class, ip, rop),
+                         "reason": transfer_reason(store, p, inputs.horizon_days, on_hand, transit, p90, need, qty)})
     return rows, skipped
 
 
@@ -335,15 +328,14 @@ def summary(conn: Connection, run, demand_run, created: bool, skipped: list[dict
     }
 
 
-def generate_recommendations(engine: Engine, stockout_run_id: int | None = None,
-                             z_by_ved: dict[str, float] = rules.Z_BY_VED) -> dict:
+def generate_recommendations(engine: Engine, stockout_run_id: int | None = None) -> dict:
     """Recommendations for one completed refresh (default: the latest). Idempotent: a run that already has a set
     returns it unchanged (created=False)."""
     with engine.connect().execution_options(isolation_level="REPEATABLE READ") as conn:
         run, demand_run = _run_pair(conn, stockout_run_id)
         if conn.execute(select(func.count()).where(recommendations.c.model_run_id == run.id)).scalar():
             return summary(conn, run, demand_run, created=False)
-        rows, skipped = build_recommendations(load_inputs(conn, run, demand_run), z_by_ved)
+        rows, skipped = build_recommendations(load_inputs(conn, run, demand_run))
     if not rows:
         raise RecommendationError(f"no item has complete inputs for run {run.id}; skipped: {skipped[:5]}")
 

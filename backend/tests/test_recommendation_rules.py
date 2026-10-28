@@ -92,13 +92,15 @@ def test_safety_stock_z_by_ved(ved, z):
 
 def test_low_stock_high_demand_long_lead_time_is_purchase_high():
     # d = 50/day, sd = 2, L = 20, sL = 2: SS = 1.65*sqrt(20*4 + 2500*4) = 165.67, ROP = 1165.67, S = 1515.67
-    (row,), _ = build(central=40, weekly_p50=350, lead=(20.0, 2.0, 20), probs={SUB: 0.35})
+    (row, transfer), _ = build(central=40, weekly_p50=350, lead=(20.0, 2.0, 20), probs={SUB: 0.35})
     ss = 1.65 * math.sqrt(20 * 4 + 2500 * 4)
     target = 50 * 20 + ss + 350
     assert row["action"] == "PURCHASE" and row["priority"] == "HIGH"
     assert row["inventory_position"] == 40
     assert row["recommended_quantity"] == math.ceil((target - 40) / 10) * 10 == 1480
     assert "below the reorder point" in row["reason"] and "1,480 units" in row["reason"]
+    # the at-risk sub-store gets the 40 units the central store has now; the purchase replenishes central stock
+    assert (transfer["action"], transfer["store_id"], transfer["transfer_qty"]) == ("TRANSFER", SUB, 40)
 
 
 # ---------------------------------------------------------------- 2. sufficient stock
@@ -107,7 +109,7 @@ def test_sufficient_stock_gives_none_low():
     (row,), _ = build(central=1000, probs={SUB: 0.01})
     assert row["action"] == "NONE" and row["priority"] == "LOW"
     assert row["recommended_quantity"] == row["transfer_qty"] == 0
-    assert "covers the order-up-to level" in row["reason"]
+    assert row["reason"] == "Stock plus open orders (1,000) covers expected demand (target 205) and no sub-store is at risk of running out."
 
 
 # ---------------------------------------------------------------- 3. open PO already covers the need
@@ -129,8 +131,9 @@ def test_open_po_partly_covering_reduces_the_quantity():
 
 # ---------------------------------------------------------------- 4. transfer / expedite
 
-def test_transfer_from_central_is_preferred_over_purchase():
-    # IP 500 >= S, but the sub-store is at risk: P90 over 14 days = 2 * (70 + 17.92) = 175.84, stock 20 + 10 in transit
+def test_transfer_only_when_central_stock_covers_a_sub_store_shortage():
+    # IP 500 >= S, but the sub-store is at risk: P90 over 14 days = 2 * (70 + 17.92) = 175.84, stock 20 + 10 in transit.
+    # Central stock covers the need, so the TRANSFER row is the whole recommendation (no item row).
     rows, _ = build(central=500, store_stock={SUB: 20}, in_transit={SUB: 10}, probs={SUB: 0.30})
     (row,) = rows
     assert row["action"] == "TRANSFER" and row["store_id"] == SUB and row["priority"] == "HIGH"
@@ -139,14 +142,15 @@ def test_transfer_from_central_is_preferred_over_purchase():
     assert row["stockout_probability"] == 0.30
 
 
-def test_transfer_allocation_never_exceeds_central_stock_and_serves_highest_risk_first():
+def test_central_shortage_with_open_po_is_expedite_plus_transfer_of_available_stock():
     # IP = 50 + 400 on order >= S, but central on hand (50) is less than the two stores' needs (~88 each)
     rows, _ = build(central=50, po=[po_line("PO-1", 400)], forecast_stores=(SUB, SUB2),
                     store_stock={SUB: 0, SUB2: 0}, probs={SUB: 0.10, SUB2: 0.50})
-    (row,) = rows                                       # the lower-risk store gets nothing left
-    assert row["store_id"] == SUB2 and row["transfer_qty"] == 50
-    assert row["priority"] == "HIGH"
-    assert "covers only 50" in row["reason"] and "PO-1" in row["reason"]
+    item, transfer = rows                               # the lower-risk store gets nothing left: no row for it
+    assert (item["action"], item["store_id"], item["purchase_order_id"]) == ("EXPEDITE_PO", None, "PO-1")
+    assert "need 176 units" in item["reason"] and "listed separately" in item["reason"]
+    assert (transfer["action"], transfer["store_id"], transfer["transfer_qty"]) == ("TRANSFER", SUB2, 50)
+    assert transfer["priority"] == "HIGH" and "covers only 50 of the 88 needed" in transfer["reason"]
     assert rules.allocate_transfers(50, [88, 88]) == [50, 0]
     assert rules.allocate_transfers(500, [88, 30]) == [88, 30]
 
@@ -158,15 +162,35 @@ def test_empty_central_store_with_open_po_is_expedite():
     assert row["action"] == "EXPEDITE_PO" and row["priority"] == "HIGH"
     assert row["purchase_order_id"] == "PO-SOON"        # the open PO expected first
     assert row["inventory_position"] == 500 and row["recommended_quantity"] == 0
-    assert "in 3 days" in row["reason"]
+    assert "which is expected on 2025-12-03" in row["reason"]
 
 
 def test_no_transfer_or_expedite_without_supporting_data():
     # at risk, IP >= S, but the sub-store already holds its P90 need: nothing to move, no PO to expedite
     (row,), _ = build(central=500, store_stock={SUB: 1000}, probs={SUB: 0.30})
     assert row["action"] == "NONE"
-    assert rules.decide_action(ip=500, target=S, probability=0.3, threshold_review=REVIEW,
-                               central_on_hand=0, open_po_count=0, transfer_need=50) == "NONE"
+    # empty central store and no open order: nothing to transfer or expedite
+    assert rules.item_action(ip=500, target=S, at_risk_need=50, central_on_hand=0, open_po_count=0,
+                             has_transfers=False) == "NONE"
+
+
+def test_item_action_decision_table():
+    act = lambda ip, need, central, pos, transfers: rules.item_action(ip, S, need, central, pos, transfers)
+    assert act(100, 0, 100, 0, False) == "PURCHASE"
+    assert act(100, 50, 100, 0, True) == "PURCHASE"            # + TRANSFER rows
+    assert act(500, 300, 100, 1, True) == "EXPEDITE_PO"        # + TRANSFER rows of what central has
+    assert act(500, 50, 100, 1, True) is None                  # TRANSFER rows only
+    assert act(500, 0, 100, 0, False) == "NONE"
+
+
+def test_purchase_and_transfer_rows_together():
+    # IP 60 < S: purchase for central stock; the at-risk sub-store gets central stock now (lead time is 10 days)
+    rows, _ = build(central=60, store_stock={SUB: 0}, probs={SUB: 0.40})
+    item, transfer = rows
+    assert item["action"] == "PURCHASE" and item["store_id"] is None and item["recommended_quantity"] == 150
+    assert "Transfers to 1 at-risk sub-store(s) are listed separately" in item["reason"]
+    assert transfer["action"] == "TRANSFER" and transfer["store_id"] == SUB and transfer["transfer_qty"] == 60
+    assert transfer["recommended_quantity"] == 0
 
 
 # ---------------------------------------------------------------- 5. never negative
@@ -237,11 +261,34 @@ def test_zero_demand_variability_is_not_missing():
 def test_pack_size_and_moq_rounding():
     assert rules.purchase_quantity(target=205, ip=100, pack_size=10, moq_packs=None) == (110, 11, False)
     assert rules.purchase_quantity(target=205, ip=100, pack_size=10, moq_packs=20) == (200, 20, True)
-    assert rules.purchase_quantity(target=205, ip=100, pack_size=None, moq_packs=None) == (105, 105, False)
-    assert rules.purchase_quantity(target=205, ip=100, pack_size=0, moq_packs=0) == (105, 105, False)
+    assert rules.purchase_quantity(target=205, ip=100, pack_size=1, moq_packs=0) == (105, 105, False)
+    with pytest.raises(ValueError):
+        rules.purchase_quantity(target=205, ip=100, pack_size=0, moq_packs=None)
     (row,), _ = build(central=50, pack=25, moq=10)          # need 154.61 -> 7 packs, MOQ 10 packs -> 250 units
     assert row["recommended_quantity"] == 250 and "supplier minimum 10 packs" in row["reason"]
 
+
+@pytest.mark.parametrize("pack", [None, 0, -5])
+def test_invalid_pack_size_is_skipped_not_replaced(pack):
+    rows, skipped = build(central=50, pack=pack)
+    assert rows == [] and skipped[0]["reason"].startswith("invalid pack size")
+
+
+# ---------------------------------------------------------------- data gaps at sub-stores / central forecasts
+
+def test_sub_store_without_inventory_snapshot_gets_no_transfer():
+    inputs = make_inputs(central=500, forecast_stores=(SUB, SUB2), store_stock={SUB: 0}, probs={SUB: 0.30, SUB2: 0.50})
+    rows, skipped = build_recommendations(inputs)        # SUB2 is at risk but has no daily_inventory row on P
+    assert [(r["action"], r["store_id"]) for r in rows] == [("TRANSFER", SUB)]
+    assert skipped == [{"item_id": ITEM, "reason": f"no inventory snapshot for sub-store {SUB2} on {P}; "
+                                                   "no transfer calculated for it"}]
+
+
+def test_central_store_forecast_rows_are_not_counted_as_demand():
+    inputs = make_inputs()
+    central_rows = inputs.forecasts.assign(store_id="STR-001")
+    (row,), _ = build_recommendations(Inputs(**{**inputs.__dict__, "forecasts": pd.concat([inputs.forecasts, central_rows])}))
+    assert row["forecast_p50"] == pytest.approx(10)       # not 20
 
 # ---------------------------------------------------------------- priority
 
@@ -281,7 +328,8 @@ def test_missing_horizons_cannot_underestimate_daily_demand():
 
 def test_single_unit_transfer_wording():
     rows, _ = build(central=1, po=[po_line("PO-1", 400)], store_stock={SUB: 0}, probs={SUB: 0.30})
-    assert rows[0]["transfer_qty"] == 1 and "Transfer 1 unit from" in rows[0]["reason"]
+    (transfer,) = [r for r in rows if r["action"] == "TRANSFER"]
+    assert transfer["transfer_qty"] == 1 and "Transfer 1 unit from" in transfer["reason"]
 
 
 def test_preferred_supplier_count_is_reported_as_an_integer():

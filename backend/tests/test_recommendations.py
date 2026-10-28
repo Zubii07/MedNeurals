@@ -5,10 +5,11 @@
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 import app.api.predictions as predictions_api
 import app.services.model_runs as model_runs
+import app.services.recommendations as recommendations_service
 from app.database.connection import engine
 from app.main import app
 from app.services.predictions import PredictionError
@@ -209,3 +210,34 @@ def test_prediction_errors_are_not_hidden_by_the_recommendation_handler(client, 
     monkeypatch.setattr(model_runs, "predict", no_data)
     response = client.post("/predictions/refresh")
     assert response.status_code == 400 and "complete week" in response.json()["detail"]
+
+
+def test_failed_insert_leaves_no_partial_set_and_retry_succeeds(client, monkeypatch):
+    _, run = insert_refresh()
+    real_build = recommendations_service.build_recommendations
+
+    def build_with_a_bad_last_row(inputs):
+        rows, skipped = real_build(inputs)
+        return rows[:-1] + [{**rows[-1], "recommended_quantity": -1}], skipped     # violates ck_recommendations_quantities
+
+    monkeypatch.setattr(recommendations_service, "build_recommendations", build_with_a_bad_last_row)
+    with pytest.raises(IntegrityError):
+        recommendations_service.generate_recommendations(engine, run)
+    assert rows(run) == []                                   # nothing from the failed attempt was kept
+
+    monkeypatch.setattr(recommendations_service, "build_recommendations", real_build)
+    retry = client.post("/recommendations/refresh", params={"model_run_id": run}).json()
+    assert retry["created"] is True and retry["row_count"] == len(rows(run)) > 0
+
+
+def test_get_recommendations_pagination(client):
+    _, run = insert_refresh(p50=700, probability=0.5)        # several rows: item rows + transfer rows
+    client.post("/recommendations/refresh", params={"model_run_id": run})
+    full = client.get("/recommendations", params={"model_run_id": run, "limit": 1000}).json()
+    assert full["total"] == len(full["items"]) == len(rows(run)) >= 3
+
+    pages = [client.get("/recommendations", params={"model_run_id": run, "limit": 2, "offset": o}).json()
+             for o in range(0, full["total"], 2)]
+    assert all(p["total"] == full["total"] and p["limit"] == 2 for p in pages)
+    assert [r["id"] for p in pages for r in p["items"]] == [r["id"] for r in full["items"]]   # stable order, no gaps
+    assert client.get("/recommendations", params={"limit": 0}).status_code == 422

@@ -1,24 +1,26 @@
 """Procurement recommendation formulas and rules. Deterministic, no ML, no database.
 
 Units: quantities are in the item's UOM (the unit of demand, stock and ordered_quantity); time is in days.
-- Daily demand d       = sum of forecast P50 over all stores and horizons / (7 * number of horizons)
-- Demand std sd        = max(0, (sum P90 - sum P50) / (1.28 * 7 * number of horizons))   (P90 = P50 + 1.28 sd)
+- Daily demand d       = sum of sub-store forecast P50 over horizons 1-4 / 28
+- Demand std sd        = max(0, (sum P90 - sum P50) / (1.28 * 28))   (P90 = P50 + 1.28 sd)
 - Safety stock SS      = z * sqrt(L * sd^2 + d^2 * sL^2), z by VED class (BACKEND_PLAN Phase 9: V 2.05 / E 1.65 / D 1.28)
 - Reorder point ROP    = d * L + SS
 - Order-up-to level S  = ROP + d * REVIEW_PERIOD_DAYS (recommendations are refreshed weekly)
 - Inventory position   = central on-hand + open purchase-order quantity (receipts are already in on-hand)
 - Purchase quantity    = 0 if IP >= S, else max(ceil((S - IP) / pack), MOQ packs) * pack
+- Transfer need        = P90 demand over the stockout horizon (H1 + H2) - store on-hand - stock in transit, for each
+                         sub-store at risk (probability >= review threshold); central on-hand is served highest risk first
 
-Action (in this order): PURCHASE if IP < S; else, if the highest sub-store stockout probability >= the review threshold,
-EXPEDITE_PO when the central store is empty and a PO is open, TRANSFER when the central store has stock for an at-risk
-sub-store; otherwise NONE.
+Decision (one item-level row, plus one TRANSFER row per at-risk sub-store that receives stock):
+  IP < S                                                  -> PURCHASE      + TRANSFER rows from central stock
+  IP >= S, at-risk need > central on-hand, a PO is open   -> EXPEDITE_PO   + TRANSFER rows of what central has
+  IP >= S, at-risk need covered by central on-hand        -> (no item row) + TRANSFER rows
+  otherwise                                               -> NONE
 Priority: HIGH if probability >= urgent threshold or (VED V and IP < ROP); MODERATE if probability >= review threshold or
-IP < ROP; else LOW.
+IP < ROP; else LOW. Item rows use the highest sub-store probability, TRANSFER rows their store's probability.
 
-The plan fixes z and the inputs. The weekly review period and the action / priority rules reproduce the notebook output
-app/ml/trained/reorder_recommendations_latest.csv (scripts/check_recommendations.py). The transfer quantity is not in the
-notebook output; it is this module's documented rule: P90 demand over the stockout horizon minus store stock and stock in
-transit, served from central on-hand in order of risk.
+The plan fixes z and the inputs. The weekly review period, the purchase trigger and the priority rule were taken from the
+notebook output app/ml/trained/reorder_recommendations_latest.csv (docs/CSV_COLUMN_MAPPING.md, Phase 9).
 """
 
 import math
@@ -29,7 +31,6 @@ from app.models.recommendations import (
     ACTION_EXPEDITE,
     ACTION_NONE,
     ACTION_PURCHASE,
-    ACTION_TRANSFER,
     PRIORITY_HIGH,
     PRIORITY_LOW,
     PRIORITY_MODERATE,
@@ -65,15 +66,15 @@ def inventory_position(on_hand: int, on_order: int) -> int:
     return on_hand + on_order
 
 
-def purchase_quantity(target: float, ip: float, pack_size: int | None, moq_packs: int | None) -> tuple[int, int, bool]:
-    pack = pack_size if pack_size and pack_size >= 1 else 1
+def purchase_quantity(target: float, ip: float, pack_size: int, moq_packs: int | None) -> tuple[int, int, bool]:
+    """(units, packs, moq_applied): whole packs, at least the MOQ (in packs) when there is one. Never negative."""
+    if pack_size < 1:
+        raise ValueError(f"invalid pack size {pack_size}")
     if ip >= target:
         return 0, 0, False
-    packs = math.ceil((target - ip) / pack)
+    packs = math.ceil((target - ip) / pack_size)
     moq = moq_packs if moq_packs and moq_packs > 0 else 0
-    moq_applied = moq > packs
-    packs = max(packs, moq)
-    return packs * pack, packs, moq_applied
+    return max(packs, moq) * pack_size, max(packs, moq), moq > packs
 
 
 def open_purchase_orders(po: pd.DataFrame, as_of) -> pd.DataFrame:
@@ -100,15 +101,15 @@ def allocate_transfers(central_on_hand: int, needs: list[int]) -> list[int]:
     return out
 
 
-def decide_action(ip: float, target: float, probability: float, threshold_review: float,
-                  central_on_hand: int, open_po_count: int, transfer_need: int) -> str:
+def item_action(ip: float, target: float, at_risk_need: int, central_on_hand: int, open_po_count: int,
+                has_transfers: bool) -> str | None:
+    """Item-level action; None = no item row (the TRANSFER rows are the whole recommendation)."""
     if ip < target:
         return ACTION_PURCHASE
-    if probability >= threshold_review:
-        if central_on_hand <= 0 and open_po_count > 0:
-            return ACTION_EXPEDITE
-        if central_on_hand > 0 and transfer_need > 0:
-            return ACTION_TRANSFER
+    if at_risk_need > central_on_hand and open_po_count > 0:
+        return ACTION_EXPEDITE
+    if has_transfers:
+        return None
     return ACTION_NONE
 
 

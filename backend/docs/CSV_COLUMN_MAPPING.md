@@ -89,19 +89,40 @@ Source: `purchase_orders` only (one row per PO line, one receipt per line). Form
 
 ## Recommendations (Phase 9)
 Code: `app/services/recommendation_rules.py` (formulas/rules), `app/services/recommendations.py` (inputs, persistence).
-Endpoints: `POST /predictions/refresh` generates them for the new run; `POST /recommendations/refresh?model_run_id=`
-(retry / backfill, idempotent); `GET /recommendations?model_run_id=&action=&priority=&item_id=&store_id=`.
-Table `recommendations`: one row per item (store_id NULL) for PURCHASE / EXPEDITE_PO / NONE, one per sub-store for
-TRANSFER; every row keeps `model_run_id` (stockout run), `demand_model_run_id` and the inputs used. Sets are never updated.
+Endpoints: `POST /predictions/refresh` generates them for the new run (a failure is logged and reported, predictions
+stay saved); `POST /recommendations/refresh?model_run_id=` (retry / backfill, idempotent);
+`GET /recommendations?model_run_id=&action=&priority=&item_id=&store_id=&limit=&offset=` (`freshness` = `current` /
+`stale` against the newest completed refresh). Table `recommendations`: one item-level row (store_id NULL) for
+PURCHASE / EXPEDITE_PO / NONE plus one TRANSFER row per sub-store that receives stock; every row keeps `model_run_id`
+(stockout run), `demand_model_run_id` and the inputs used. A set is written in one transaction and never updated.
+Skipped items (incomplete inputs) are returned with their reason by the call that creates the set; they are not stored.
 
 Inputs, all as of the run's prediction date P:
-- d = Σ P50 (all stores, horizons 1–4) / 28; σd = max(0, (Σ P90 − Σ P50) / (1.28 · 28)) — `forecast_predictions`
-- L, σL = mean / std of the preferred supplier's routine orders received by P — Phase 8 `compute_performance`
+- d = Σ sub-store P50 (horizons 1–4, all four required) / 28; σd = max(0, (Σ P90 − Σ P50) / (1.28 · 28))
+- L, σL = mean / std of the preferred supplier's routine orders received by P (≥ 2) — Phase 8 `compute_performance`
 - central on hand = `daily_inventory.closing_qty` (STR-001, date P); open PO qty = `purchase_orders.ordered_quantity` with
   `order_date ≤ P`, not received by P, status not cancelled (equals `daily_inventory.on_order_qty` of STR-001)
-- pack = `medical_items.uom_per_purchase_pack`; MOQ = `supplier_items.minimum_order_quantity` (packs, preferred supplier)
+- pack = `medical_items.uom_per_purchase_pack` (must be ≥ 1); MOQ = `supplier_items.minimum_order_quantity` in packs
+  (`ordered_packs × pack = ordered_quantity` on every PO line; 97 % of routine POs order ≥ MOQ packs)
 - z by `medical_items.ved_class`: V 2.05 / E 1.65 / D 1.28
+- transfers: sub-stores with stockout probability ≥ review threshold; need = P90 of H1+H2 − on hand − in transit
+  (`stock_transfers` shipped by P, arriving after P); a sub-store without an inventory row on P gets no transfer
 
 SS = z·√(L·σd² + d²·σL²); ROP = d·L + SS; S = ROP + 7·d; IP = central on hand + open PO qty;
-quantity = max(⌈(S − IP)/pack⌉, MOQ)·pack when IP < S. Check: `python -m scripts.check_recommendations --reference --flat-z`
-(notebook used z = 1.65 for all items) and `--db`.
+purchase = max(⌈(S − IP)/pack⌉, MOQ)·pack when IP < S; transfers served from central on hand, highest risk first.
+
+| Condition (in order) | Item row | Sub-store rows |
+|---|---|---|
+| IP < S | PURCHASE | TRANSFER from central stock |
+| IP ≥ S, at-risk need > central on hand, a PO is open | EXPEDITE_PO (PO expected first) | TRANSFER of what central has |
+| IP ≥ S, at-risk need covered by central on hand | — | TRANSFER |
+| otherwise | NONE | — |
+
+Priority: HIGH if probability ≥ urgent threshold or (V and IP < ROP); MODERATE if ≥ review threshold or IP < ROP; else LOW.
+Check a saved set: `python -m scripts.check_recommendations [--model-run-id N]`.
+
+Reference CSV (`app/ml/trained/reorder_recommendations_latest.csv`, cutoff 2025-12-29): the notebook used z = 1.65 for
+every item and one action per item. A one-time replay with z = 1.65 and one action per item (2026-10-28) matched it on
+inventory position for 403/403 items, action/priority 402/403 and quantity 401/403 (Phase 6 forecast rounding and
+Phase 8's 2-decimal lead time). The production rules differ on purpose — VED z changes SS / ROP / quantity for V and D
+items, and the decision table above adds TRANSFER rows next to PURCHASE and EXPEDITE_PO — so exact parity is not expected.
