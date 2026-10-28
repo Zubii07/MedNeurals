@@ -1,4 +1,5 @@
 import datetime
+import logging
 from fastapi import APIRouter, HTTPException, Query
 from app.database.connection import engine
 from app.schemas.predictions import PredictionPreview, PredictionStatus
@@ -7,6 +8,7 @@ from app.services.predictions import PredictionError, predict, RISK_LOW, RISK_RE
 from app.services.recommendations import generate_recommendations
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/refresh", response_model=PredictionStatus)
@@ -21,6 +23,7 @@ def refresh() -> PredictionStatus:
     try:
         recommendations = {"status": "generated", "summary": generate_recommendations(engine, stockout_run_id)}
     except Exception as exc:    # any failure here is reported; the committed predictions are kept
+        logger.exception("recommendation generation failed for stockout run %s", stockout_run_id)
         recommendations = {"status": "failed", "error": str(exc)[:2000]}
     with engine.connect() as conn:
         return PredictionStatus(**run_status(conn, stockout_run_id), recommendations=recommendations)

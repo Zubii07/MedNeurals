@@ -38,6 +38,7 @@ from app.models.recommendations import (
 Z_BY_VED = {"V": 2.05, "E": 1.65, "D": 1.28}
 P90_Z = 1.28
 REVIEW_PERIOD_DAYS = 7
+FORECAST_HORIZONS = (1, 2, 3, 4)          # weeks; d and sd divide by 7 * 4 = 28 days
 
 
 def daily_demand(sum_p50: float, n_days: int) -> float:

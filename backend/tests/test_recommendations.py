@@ -11,6 +11,7 @@ import app.api.predictions as predictions_api
 import app.services.model_runs as model_runs
 from app.database.connection import engine
 from app.main import app
+from app.services.predictions import PredictionError
 from app.services.recommendations import RecommendationError
 from tests.test_model_runs import fake_predict
 
@@ -124,14 +125,15 @@ def test_get_recommendations_latest_set_and_filters(client):
 
     latest = client.get("/recommendations").json()
     assert latest["model_run_id"] == run_b and latest["total"] == len(rows(run_b))
-    assert latest["latest_prediction_run_id"] == run_b and latest["is_latest"] is True
+    assert latest["latest_prediction_run_id"] == run_b and latest["freshness"] == "current"
+    assert latest["generated_at"] and latest["latest_prediction_date"] == latest["prediction_date"]
     row = latest["items"][0]
     assert row["product_id"] in ITEMS and row["product_name"] and row["unit"]
     assert row["details"]["supplier_name"] and row["model_run_id"] == run_b
     assert row["recommended_purchase_quantity"] >= 0 and row["transfer_quantity"] >= 0
 
     older = client.get("/recommendations", params={"model_run_id": run_a, "item_id": ITEMS[0]}).json()
-    assert older["is_latest"] is False
+    assert older["freshness"] == "stale" and older["latest_prediction_run_id"] == run_b
     assert older["model_run_id"] == run_a and {r["product_id"] for r in older["items"]} == {ITEMS[0]}
     purchase = client.get("/recommendations", params={"model_run_id": run_a, "action": "PURCHASE"}).json()
     assert all(r["action"] == "PURCHASE" for r in purchase["items"])
@@ -176,19 +178,34 @@ def test_failed_recommendation_step_keeps_the_predictions(client, monkeypatch):
     assert retry.status_code == 200 and retry.json()["created"] is True
 
 
-def test_unexpected_error_in_recommendation_step_is_reported_not_raised(client, monkeypatch):
+def test_unexpected_error_in_recommendation_step_is_reported_not_raised(client, monkeypatch, caplog):
+    _, older = insert_refresh()
+    client.post("/recommendations/refresh", params={"model_run_id": older})   # an older successful set
     monkeypatch.setattr(model_runs, "predict", fake_predict)
 
     def crash(engine, run_id):
         raise KeyError("unexpected column")
 
     monkeypatch.setattr(predictions_api, "generate_recommendations", crash)
-    response = client.post("/predictions/refresh")
+    with caplog.at_level("ERROR", logger="app.api.predictions"):
+        response = client.post("/predictions/refresh")
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "completed" and body["recommendations"]["status"] == "failed"
-    assert "unexpected column" in body["recommendations"]["error"]
-    _, latest_without_set = body["demand_forecast"]["model_run_id"], body["stockout"]["model_run_id"]
-    listed = client.get("/recommendations")
-    if listed.status_code == 200:                       # an older set exists: it is flagged as not the latest
-        assert listed.json()["is_latest"] is False and listed.json()["latest_prediction_run_id"] == latest_without_set
+    new_run = body["stockout"]["model_run_id"]
+    assert body["status"] == "completed" and body["stockout_count"] == 1        # predictions saved
+    assert body["recommendations"]["status"] == "failed" and "unexpected column" in body["recommendations"]["error"]
+    assert any(r.levelname == "ERROR" and str(new_run) in r.getMessage() and r.exc_info for r in caplog.records)
+
+    # the older set is still served, but flagged as stale against the newer refresh
+    listed = client.get("/recommendations").json()
+    assert listed["model_run_id"] == older
+    assert listed["freshness"] == "stale" and listed["latest_prediction_run_id"] == new_run
+
+
+def test_prediction_errors_are_not_hidden_by_the_recommendation_handler(client, monkeypatch):
+    def no_data(conn, data_cutoff, artifacts):
+        raise PredictionError("demand history must include the complete week")
+
+    monkeypatch.setattr(model_runs, "predict", no_data)
+    response = client.post("/predictions/refresh")
+    assert response.status_code == 400 and "complete week" in response.json()["detail"]

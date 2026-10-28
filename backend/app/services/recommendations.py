@@ -125,9 +125,9 @@ def none_reason(ip, target, prob, store, review, central, open_po_count, transfe
 def build_recommendations(inputs: Inputs, z_by_ved: dict[str, float] = rules.Z_BY_VED) -> tuple[list[dict], list[dict]]:
     """Pure pandas: (rows for `recommendations` without run columns, skipped [{item_id, reason}])."""
     P = inputs.prediction_date
-    n_horizons = inputs.forecasts["horizon"].nunique()
-    forecast_days = 7 * n_horizons
-    item_horizons = inputs.forecasts.groupby("item_id")["horizon"].nunique()
+    required = set(rules.FORECAST_HORIZONS)
+    forecast_days = 7 * len(required)
+    item_horizons = inputs.forecasts.groupby("item_id")["horizon"].agg(set)
     transfer_weeks = math.ceil(inputs.horizon_days / 7)
 
     fc_item = inputs.forecasts.groupby("item_id")[["p50", "p90"]].sum()
@@ -151,8 +151,9 @@ def build_recommendations(inputs: Inputs, z_by_ved: dict[str, float] = rules.Z_B
 
         if item_id not in fc_item.index:
             skip("no demand forecast for this item in the forecast run"); continue
-        if item_horizons.at[item_id] != n_horizons:
-            skip(f"forecast covers {item_horizons.at[item_id]} of {n_horizons} horizons"); continue
+        if item_horizons.at[item_id] != required:
+            missing = sorted(required - item_horizons.at[item_id])
+            skip(f"forecast is missing horizon(s) {missing} of {sorted(required)}; daily demand needs all four"); continue
         item_risk = stockout[stockout["item_id"] == item_id]
         if item_risk.empty:
             skip("no stockout prediction for this item in the stockout run"); continue

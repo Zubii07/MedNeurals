@@ -1,4 +1,5 @@
 import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -75,8 +76,12 @@ class RecommendationRow(BaseModel):
 
 class RecommendationPage(BaseModel):
     model_run_id: int
-    latest_prediction_run_id: int | None  # newest completed refresh (stockout run)
-    is_latest: bool                       # False: this set belongs to an older refresh (e.g. the newest one failed)
+    generated_at: datetime.datetime       # when this set was written
+    latest_prediction_run_id: int | None  # newest completed prediction refresh (stockout run)
+    latest_prediction_date: datetime.date | None
+    # "current": this set belongs to the newest completed refresh. "stale": a newer refresh exists without its own
+    # recommendations (its recommendation step failed or was not run); POST /recommendations/refresh generates them.
+    freshness: Literal["current", "stale"]
     demand_model_run_id: int
     prediction_date: datetime.date
     data_cutoff_date: datetime.date

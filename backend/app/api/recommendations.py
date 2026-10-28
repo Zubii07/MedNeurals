@@ -44,8 +44,11 @@ def list_recommendations(
             model_run_id = latest_recommendation_run_id(conn)
             if model_run_id is None:
                 raise HTTPException(status_code=404, detail="no recommendations yet; call POST /recommendations/refresh")
-        run = conn.execute(text("""SELECT model_run_id, demand_model_run_id, prediction_date, data_cutoff_date
-                                   FROM recommendations WHERE model_run_id = :id LIMIT 1"""), {"id": model_run_id}).one_or_none()
+        run = conn.execute(text("""SELECT model_run_id, demand_model_run_id, prediction_date, data_cutoff_date,
+                                          min(created_at) AS generated_at
+                                   FROM recommendations WHERE model_run_id = :id
+                                   GROUP BY model_run_id, demand_model_run_id, prediction_date, data_cutoff_date"""),
+                           {"id": model_run_id}).one_or_none()
         if run is None:
             raise HTTPException(status_code=404, detail=f"no recommendations for model run {model_run_id}")
 
@@ -56,6 +59,7 @@ def list_recommendations(
                 where.append(f"r.{name} = :{name}")
                 params[name] = value
         latest_run = latest_completed_run_id(conn)
+        latest_date = conn.execute(text("SELECT prediction_date FROM model_runs WHERE id = :id"), {"id": latest_run}).scalar()
         condition = " AND ".join(where)
         total = conn.execute(text(f"SELECT count(*) FROM recommendations r WHERE {condition}"), params).scalar()
         rows = conn.execute(text(f"""
@@ -68,7 +72,8 @@ def list_recommendations(
             LIMIT :limit OFFSET :offset"""), params).mappings().all()
 
     return {
-        **run._mapping, "latest_prediction_run_id": latest_run, "is_latest": model_run_id == latest_run,
+        **run._mapping, "latest_prediction_run_id": latest_run, "latest_prediction_date": latest_date,
+        "freshness": "current" if model_run_id == latest_run else "stale",
         "total": total, **page,
         "items": [{
             "id": r["id"], "product_id": r["item_id"], "product_name": r["item_name"], "unit": r["uom"],

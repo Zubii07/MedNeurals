@@ -261,9 +261,31 @@ def test_item_with_incomplete_forecast_horizons_is_skipped():
     other = inputs.forecasts.assign(item_id="MED-000002")            # a second item with all 4 horizons
     partial = inputs.forecasts[inputs.forecasts["horizon"] <= 2]     # this item: only 2 of 4
     rows, skipped = build_recommendations(Inputs(**{**inputs.__dict__, "forecasts": pd.concat([partial, other])}))
-    assert rows == [] and skipped == [{"item_id": ITEM, "reason": "forecast covers 2 of 4 horizons"}]
+    assert rows == []
+    assert skipped == [{"item_id": ITEM, "reason": "forecast is missing horizon(s) [3, 4] of [1, 2, 3, 4]; "
+                                                   "daily demand needs all four"}]
+
+
+def test_missing_horizons_cannot_underestimate_daily_demand():
+    # Regression: with horizons 3-4 missing, sum P50 / 28 would give 140 / 28 = 5/day instead of the true 10/day.
+    # This also holds when every item of the run lacks the same horizons (the divisor is fixed at 28, not inferred).
+    inputs = make_inputs()
+    partial = inputs.forecasts[inputs.forecasts["horizon"] <= 2]
+    assert partial["p50"].sum() / 28 == 5
+    rows, skipped = build_recommendations(Inputs(**{**inputs.__dict__, "forecasts": partial}))
+    assert rows == [] and "missing horizon(s) [3, 4]" in skipped[0]["reason"]
+
+    (complete,), _ = build_recommendations(inputs)
+    assert complete["forecast_p50"] == pytest.approx(10)
 
 
 def test_single_unit_transfer_wording():
     rows, _ = build(central=1, po=[po_line("PO-1", 400)], store_stock={SUB: 0}, probs={SUB: 0.30})
     assert rows[0]["transfer_qty"] == 1 and "Transfer 1 unit from" in rows[0]["reason"]
+
+
+def test_preferred_supplier_count_is_reported_as_an_integer():
+    inputs = make_inputs()
+    items = inputs.items.assign(supplier_id=None, preferred_count=0.0)   # float after a pandas fillna (CSV path)
+    _, skipped = build_recommendations(Inputs(**{**inputs.__dict__, "items": items}))
+    assert skipped[0]["reason"].startswith("0 preferred suppliers")
