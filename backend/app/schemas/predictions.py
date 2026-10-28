@@ -20,7 +20,7 @@ class ModelRunInfo(ModelInfo):
     completed_at: datetime.datetime | None
 
 
-class PredictionStatus(BaseModel):
+class PredictionRun(BaseModel):
     """One prediction refresh: a demand_forecast run and the stockout run that used its forecast."""
     status: str
     data_cutoff_date: datetime.date
@@ -30,6 +30,9 @@ class PredictionStatus(BaseModel):
     stockout_count: int
     demand_forecast: ModelRunInfo
     stockout: ModelRunInfo
+
+
+class PredictionStatus(PredictionRun):
     recommendations: RecommendationRefreshResult | None = None   # only on POST /predictions/refresh
 
 

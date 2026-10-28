@@ -117,11 +117,17 @@ def run_status(conn: Connection, stockout_run_id: int) -> dict:
 
 
 def latest_completed_run_id(conn: Connection) -> int | None:
-    """The newest successful refresh. Both runs of a refresh complete in the same transaction, so the newest completed
-    stockout run identifies it; ties on completed_at are broken by the higher id."""
+    """The newest successful refresh, identified by its stockout run: a completed stockout run whose demand_forecast run
+    also completed for the same data cutoff and prediction date (both complete in the same transaction, so this only
+    excludes inconsistent rows). Running and failed runs are never picked; ties on completed_at go to the higher id."""
+    demand = runs.alias("demand")
     return conn.execute(
         select(runs.c.id)
-        .where(runs.c.model_type == MODEL_TYPE_STOCKOUT, runs.c.status == RUN_COMPLETED)
+        .join(demand, demand.c.id == runs.c.demand_model_run_id)
+        .where(runs.c.model_type == MODEL_TYPE_STOCKOUT, runs.c.status == RUN_COMPLETED,
+               demand.c.model_type == MODEL_TYPE_DEMAND, demand.c.status == RUN_COMPLETED,
+               demand.c.data_cutoff_date == runs.c.data_cutoff_date,
+               demand.c.prediction_date == runs.c.prediction_date)
         .order_by(runs.c.completed_at.desc(), runs.c.id.desc())
         .limit(1)
     ).scalar()

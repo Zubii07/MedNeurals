@@ -57,6 +57,7 @@ class RecommendationRow(BaseModel):
     product_name: str
     unit: str
     store_id: str | None                  # TRANSFER rows only
+    store_name: str | None
     action: str                           # PURCHASE / TRANSFER / EXPEDITE_PO / NONE
     priority: str                         # HIGH / MODERATE / LOW
     recommended_purchase_quantity: int
@@ -71,6 +72,7 @@ class RecommendationRow(BaseModel):
     model_run_id: int
     demand_model_run_id: int
     prediction_date: datetime.date
+    data_cutoff_date: datetime.date
     created_at: datetime.datetime
 
 
