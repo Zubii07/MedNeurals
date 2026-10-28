@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.data_import import router as data_import_router
 from app.api.predictions import router as predictions_router
 from app.api.reads import router as reads_router
+from app.api.recommendations import router as recommendations_router
 from app.api.suppliers import router as suppliers_router
 from app.database.connection import engine
 from app.ml.artifacts import get_artifacts
@@ -23,6 +24,7 @@ app.include_router(data_import_router)
 app.include_router(reads_router)
 app.include_router(predictions_router)
 app.include_router(suppliers_router)
+app.include_router(recommendations_router)
 
 
 @app.get("/health")

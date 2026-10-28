@@ -2,6 +2,8 @@ import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.recommendations import RecommendationRefreshResult
+
 
 class ModelInfo(BaseModel):
     model_type: str
@@ -28,6 +30,7 @@ class PredictionStatus(BaseModel):
     stockout_count: int
     demand_forecast: ModelRunInfo
     stockout: ModelRunInfo
+    recommendations: RecommendationRefreshResult | None = None   # only on POST /predictions/refresh
 
 
 class StockoutThresholds(BaseModel):

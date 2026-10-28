@@ -4,19 +4,26 @@ from app.database.connection import engine
 from app.schemas.predictions import PredictionPreview, PredictionStatus
 from app.services.model_runs import latest_completed_run_id, latest_data_cutoff, refresh_predictions, run_status
 from app.services.predictions import PredictionError, predict, RISK_LOW, RISK_REVIEW, RISK_URGENT
+from app.services.recommendations import generate_recommendations
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
 
 @router.post("/refresh", response_model=PredictionStatus)
 def refresh() -> PredictionStatus:
-    """Run both models on the latest data cutoff and save the results as new model runs (earlier runs are kept)."""
+    """Run both models on the latest data cutoff and save the results as new model runs (earlier runs are kept), then
+    generate the run's recommendations. The predictions are committed first: a failed recommendation step is reported
+    in `recommendations` and can be retried with recommendations/refresh."""
     try:
         stockout_run_id = refresh_predictions(engine)
     except PredictionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        recommendations = {"status": "generated", "summary": generate_recommendations(engine, stockout_run_id)}
+    except Exception as exc:    # any failure here is reported; the committed predictions are kept
+        recommendations = {"status": "failed", "error": str(exc)[:2000]}
     with engine.connect() as conn:
-        return PredictionStatus(**run_status(conn, stockout_run_id))
+        return PredictionStatus(**run_status(conn, stockout_run_id), recommendations=recommendations)
 
 
 @router.get("/status", response_model=PredictionStatus)

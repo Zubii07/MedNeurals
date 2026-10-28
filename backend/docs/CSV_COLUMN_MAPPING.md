@@ -86,3 +86,22 @@ Source: `purchase_orders` only (one row per PO line, one receipt per line). Form
 - On-time rate = share of included orders with `receipt_date ≤ expected_delivery_date`; delayed = the rest.
 - Fill rate = Σ min(`accepted_quantity`, `ordered_quantity`) / Σ `ordered_quantity`; partial = accepted < ordered.
 - A metric without data is `null` and listed in `unavailable` with the reason.
+
+## Recommendations (Phase 9)
+Code: `app/services/recommendation_rules.py` (formulas/rules), `app/services/recommendations.py` (inputs, persistence).
+Endpoints: `POST /predictions/refresh` generates them for the new run; `POST /recommendations/refresh?model_run_id=`
+(retry / backfill, idempotent); `GET /recommendations?model_run_id=&action=&priority=&item_id=&store_id=`.
+Table `recommendations`: one row per item (store_id NULL) for PURCHASE / EXPEDITE_PO / NONE, one per sub-store for
+TRANSFER; every row keeps `model_run_id` (stockout run), `demand_model_run_id` and the inputs used. Sets are never updated.
+
+Inputs, all as of the run's prediction date P:
+- d = Σ P50 (all stores, horizons 1–4) / 28; σd = max(0, (Σ P90 − Σ P50) / (1.28 · 28)) — `forecast_predictions`
+- L, σL = mean / std of the preferred supplier's routine orders received by P — Phase 8 `compute_performance`
+- central on hand = `daily_inventory.closing_qty` (STR-001, date P); open PO qty = `purchase_orders.ordered_quantity` with
+  `order_date ≤ P`, not received by P, status not cancelled (equals `daily_inventory.on_order_qty` of STR-001)
+- pack = `medical_items.uom_per_purchase_pack`; MOQ = `supplier_items.minimum_order_quantity` (packs, preferred supplier)
+- z by `medical_items.ved_class`: V 2.05 / E 1.65 / D 1.28
+
+SS = z·√(L·σd² + d²·σL²); ROP = d·L + SS; S = ROP + 7·d; IP = central on hand + open PO qty;
+quantity = max(⌈(S − IP)/pack⌉, MOQ)·pack when IP < S. Check: `python -m scripts.check_recommendations --reference --flat-z`
+(notebook used z = 1.65 for all items) and `--db`.

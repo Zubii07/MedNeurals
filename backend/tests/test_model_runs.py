@@ -43,6 +43,7 @@ def created_runs():
         start = conn.execute(text("SELECT coalesce(max(id), 0) FROM model_runs")).scalar()
     yield
     with engine.begin() as conn:
+        conn.execute(text("DELETE FROM recommendations WHERE model_run_id > :id"), {"id": start})   # Phase 9 rows
         conn.execute(text("DELETE FROM forecast_predictions WHERE model_run_id > :id"), {"id": start})
         conn.execute(text("DELETE FROM stockout_predictions WHERE model_run_id > :id"), {"id": start})
         conn.execute(text("DELETE FROM model_runs WHERE id > :id"), {"id": start})
@@ -53,6 +54,11 @@ def client(monkeypatch, created_runs):
     monkeypatch.setattr(model_runs, "predict", fake_predict)
     with TestClient(app) as c:
         yield c
+
+
+def refresh_status(body: dict) -> dict:
+    """A refresh response without its Phase 9 recommendation step: what GET /predictions/status returns."""
+    return {**body, "recommendations": None}
 
 
 def counts(run_id: int) -> tuple[int, int]:
@@ -83,7 +89,7 @@ def test_two_refreshes_are_both_kept_and_traceable(client):
 
     assert second["stockout"]["model_run_id"] > first["stockout"]["model_run_id"]
     assert counts(first["demand_forecast"]["model_run_id"]) == (8, 0)    # first refresh still there
-    assert client.get("/predictions/status").json() == second
+    assert client.get("/predictions/status").json() == refresh_status(second)
 
 
 def test_saved_rows_carry_the_run_dates(client):
@@ -129,7 +135,7 @@ def test_failed_save_leaves_no_rows_and_keeps_last_success(client, monkeypatch):
         ("demand_forecast", "failed", 0), ("stockout", "failed", 0)]
     assert all(r.error_message for r in failed)
     assert all(counts(r.id) == (0, 0) for r in failed)                  # forecast COPY was rolled back too
-    assert client.get("/predictions/status").json() == good
+    assert client.get("/predictions/status").json() == refresh_status(good)
     assert counts(good["demand_forecast"]["model_run_id"]) == (8, 0)
 
 
@@ -146,7 +152,7 @@ def test_prediction_error_is_recorded_and_returns_400(client, monkeypatch):
         statuses = conn.execute(text("SELECT status FROM model_runs WHERE id > :id"),
                                 {"id": good["stockout"]["model_run_id"]}).scalars().all()
     assert statuses == ["failed", "failed"]
-    assert client.get("/predictions/status").json() == good
+    assert client.get("/predictions/status").json() == refresh_status(good)
 
 
 def test_status_breaks_completed_at_ties_by_id(client):
