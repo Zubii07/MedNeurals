@@ -1,9 +1,3 @@
-"""Phase 9 verification: check the latest saved recommendation set against independent SQL (central stock, open PO
-quantity, daily_inventory.on_order_qty, inventory position) and recompute SS / ROP / quantities with pandas.
-
-Usage (from backend/):  python -m scripts.check_recommendations [--model-run-id N]
-"""
-
 import argparse
 
 import numpy as np
