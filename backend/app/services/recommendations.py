@@ -63,7 +63,7 @@ class Inputs:
                                        # ordered_quantity, status
 
 
-# ---------------------------------------------------------------- reasons (short, plain language; numbers in details)
+# reasons (short, plain language; numbers in details)
 
 def _n(x: float) -> str:
     return f"{x:,.0f}"
