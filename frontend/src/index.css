@@ -1,0 +1,155 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Theme tokens - plan section 3.2.
+ * Raw design tokens live in :root, are mapped onto the shadcn theme variables and are exposed to
+ * Tailwind utilities through @theme inline (e.g. bg-warning-bg, text-danger, bg-mint).
+ */
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+
+  /* MedNeurals semantic colours (section 3.2) */
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-violet: var(--violet);
+  --color-violet-bg: var(--violet-bg);
+  --color-mint: var(--accent-mint);
+  --color-mint-light: var(--accent-mint-light);
+  --color-sidebar-muted: var(--sidebar-text-muted);
+  --color-teal-card-from: var(--teal-card-from);
+  --color-teal-card-to: var(--teal-card-to);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* ---- Design tokens (section 3.2) ---- */
+  --page-bg: #f5f8fa;
+  --card-bg: #ffffff;
+  --card-border: #e6ecf0;
+  --text: #0f2a37;
+  --text-muted: #64748b;
+  --primary-teal: #0f766e;
+  --accent-mint: #5eead4;
+  --accent-mint-light: #99f6e4;
+  --danger: #e11d48;
+  --danger-bg: #ffe4e6;
+  --warning: #f59e0b;
+  --warning-bg: #fef3c7;
+  --success: #10b981;
+  --success-bg: #d1fae5;
+  --info: #3b82f6;
+  --info-bg: #dbeafe;
+  --violet: #8b5cf6;
+  --violet-bg: #ede9fe;
+  --sidebar-bg-from: #0b3442;
+  --sidebar-bg-to: #0a2a36;
+  --sidebar-active: #12505c;
+  --sidebar-text: #e6f1f3;
+  --sidebar-text-muted: #9db8bf;
+  --teal-card-from: #0e3a47;
+  --teal-card-to: #0b5560;
+
+  /* ---- shadcn theme variables mapped onto the tokens ---- */
+  --background: var(--page-bg);
+  --foreground: var(--text);
+  --card: var(--card-bg);
+  --card-foreground: var(--text);
+  --popover: #ffffff;
+  --popover-foreground: var(--text);
+  --primary: var(--primary-teal);
+  --primary-foreground: #ffffff;
+  --secondary: #edf3f5;
+  --secondary-foreground: var(--text);
+  --muted: #f1f5f8;
+  --muted-foreground: var(--text-muted);
+  --accent: #e6f7f4;
+  --accent-foreground: #0b5560;
+  --destructive: var(--danger);
+  --border: var(--card-border);
+  --input: var(--card-border);
+  --ring: var(--primary-teal);
+  --chart-1: var(--danger);
+  --chart-2: var(--warning);
+  --chart-3: var(--success);
+  --chart-4: var(--info);
+  --chart-5: var(--violet);
+  --radius: 0.75rem;
+  --sidebar: var(--sidebar-bg-from);
+  --sidebar-foreground: var(--sidebar-text);
+  --sidebar-primary: var(--accent-mint);
+  --sidebar-primary-foreground: var(--sidebar-bg-to);
+  --sidebar-accent: var(--sidebar-active);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: var(--accent-mint);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  /* Dark teal gradient on the desktop sidebar and the mobile drawer (section 3.2). */
+  [data-sidebar="sidebar"] {
+    background-image: linear-gradient(180deg, var(--sidebar-bg-from) 0%, var(--sidebar-bg-to) 100%);
+  }
+}
