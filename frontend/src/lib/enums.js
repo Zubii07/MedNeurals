@@ -128,6 +128,9 @@ export const IMPORT_DATASETS = [
   { value: 'stockout_events', label: 'Stockout events' },
 ]
 
+/** Table page sizes (plan §7.2). */
+export const PAGE_SIZES = [25, 50, 100]
+
 /* ----------------------------------------------------------------- stores */
 
 /**

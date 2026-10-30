@@ -125,6 +125,52 @@ export function useProducts(params = {}, options) {
   })
 }
 
+/**
+ * GET /products/{item_id} → ProductDetail (§6.4). 404 "Product X not found".
+ * @param {string | undefined} itemId
+ */
+export function useProduct(itemId, options) {
+  return useQuery({
+    queryKey: ['products', 'detail', itemId],
+    queryFn: ({ signal }) => apiGet(`/products/${encodeURIComponent(itemId)}`, undefined, { signal }),
+    enabled: Boolean(itemId),
+    ...options,
+  })
+}
+
+/**
+ * GET /products/{item_id}/analysis → ProductAnalysis (§6.4). 200 even without a run (run sections null); 404 unknown item.
+ * @param {string | undefined} itemId
+ */
+export function useProductAnalysis(itemId, options) {
+  return useQuery({
+    queryKey: ['products', 'analysis', itemId],
+    queryFn: ({ signal }) => apiGet(`/products/${encodeURIComponent(itemId)}/analysis`, undefined, { signal }),
+    enabled: Boolean(itemId),
+    ...options,
+  })
+}
+
+/**
+ * Distinct categories derived from GET /products?limit=1000 (there is no /categories endpoint, §6.11).
+ * Grouping returned rows in the browser is allowed (§2 rule 3).
+ */
+export function useProductCategories() {
+  return useProducts(
+    { limit: 1000 },
+    {
+      staleTime: 30 * 60_000,
+      select: (page) => {
+        const byId = new Map()
+        for (const item of page.items ?? []) {
+          if (!byId.has(item.category_id)) byId.set(item.category_id, { category_id: item.category_id, category_name: item.category_name })
+        }
+        return [...byId.values()].sort((a, b) => a.category_id.localeCompare(b.category_id))
+      },
+    },
+  )
+}
+
 /** Header typeahead: GET /products?search=…&limit=8 (plan §4). Disabled until `search` is non-empty. */
 export function useProductSearch(search, options) {
   const term = (search ?? '').trim()
