@@ -6,7 +6,7 @@ The full plan, design reference and API contract live in `docs/FRONTEND_PLAN.md`
 ## Run
 
 ```bash
-# backend (from the repo root)
+# backend
 cd backend && uvicorn app.main:app --reload      # http://127.0.0.1:8000
 
 # frontend
