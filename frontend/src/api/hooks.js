@@ -179,3 +179,39 @@ export function useProductSearch(search, options) {
     { enabled: term.length > 0, staleTime: 5 * 60_000, placeholderData: (previous) => previous, ...options },
   )
 }
+
+/* -------------------------------------------------------------- suppliers */
+
+/**
+ * GET /suppliers → Page<SupplierRow> (§6.6).
+ * @param {{ item_id?: string, active_only?: boolean, limit?: number, offset?: number }} [params]
+ */
+export function useSuppliers(params = {}, options) {
+  return useQuery({
+    queryKey: ['suppliers', params],
+    queryFn: ({ signal }) => apiGet('/suppliers', params, { signal }),
+    ...options,
+  })
+}
+
+/**
+ * Every supplier (15 rows) for dropdowns and id → name lookups. There is no /suppliers/{id} endpoint,
+ * so pages read master fields from this list (already-returned rows, §2 rule 3).
+ */
+export function useSupplierList(options) {
+  return useSuppliers({ limit: 1000 }, { staleTime: 30 * 60_000, ...options })
+}
+
+/**
+ * GET /suppliers/{supplier_id}/performance → SupplierPerformance (§6.6). 404 "Supplier X not found".
+ * @param {string | undefined} supplierId
+ * @param {{ as_of?: string, include_emergency?: boolean }} [params]
+ */
+export function useSupplierPerformance(supplierId, params = {}, options) {
+  return useQuery({
+    queryKey: ['suppliers', 'performance', supplierId, params],
+    queryFn: ({ signal }) => apiGet(`/suppliers/${encodeURIComponent(supplierId)}/performance`, params, { signal }),
+    enabled: Boolean(supplierId),
+    ...options,
+  })
+}

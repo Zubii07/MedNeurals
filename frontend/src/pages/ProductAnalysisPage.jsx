@@ -1,9 +1,9 @@
 import { Link, useParams } from 'react-router-dom'
-import { Activity, SearchX } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Activity } from 'lucide-react'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import ErrorState from '@/components/common/ErrorState'
+import NotFoundCard from '@/components/common/NotFoundCard'
 import ProductHeader from '@/components/product/ProductHeader'
 import SummaryStrip from '@/components/product/SummaryStrip'
 import RecommendationSection from '@/components/product/RecommendationSection'
@@ -12,27 +12,6 @@ import ForecastSection from '@/components/product/ForecastSection'
 import LiveContextSection from '@/components/product/LiveContextSection'
 import { useProductAnalysis } from '@/api/hooks'
 import { formatDate, formatDateTime, runLabel } from '@/lib/format'
-
-function NotFoundCard({ itemId }) {
-  return (
-    <div className="mx-auto max-w-lg pt-6">
-      <Card>
-        <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-          <span className="flex size-12 items-center justify-center rounded-xl bg-danger-bg text-danger">
-            <SearchX className="size-6" aria-hidden="true" />
-          </span>
-          <h1 className="text-xl font-semibold">Product not found</h1>
-          <p className="text-sm text-muted-foreground">
-            There is no item with id <span className="font-mono break-all text-foreground">{itemId}</span>.
-          </p>
-          <Button asChild className="mt-2 rounded-lg">
-            <Link to="/products">Back to Products</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
 
 function PageSkeleton() {
   return (
@@ -104,7 +83,7 @@ export default function ProductAnalysisPage() {
   const { data, isPending, isError, error, refetch, isFetching } = useProductAnalysis(itemId)
 
   if (isPending) return <PageSkeleton />
-  if (isError && error?.status === 404) return <NotFoundCard itemId={itemId} />
+  if (isError && error?.status === 404) return <NotFoundCard title="Product not found" noun="item" id={itemId} to="/products" linkLabel="Back to Products" />
   if (isError) {
     return (
       <Card>

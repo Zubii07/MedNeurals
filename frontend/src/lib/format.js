@@ -148,3 +148,26 @@ export function greetingForHour(hour = new Date().getHours()) {
   if (hour < 17) return 'Good afternoon'
   return 'Good evening'
 }
+
+/**
+ * Local calendar date as `YYYY-MM-DD` (the inverse of parseDate; no UTC shift). Null/invalid -> ''.
+ * @param {Date | null | undefined} date
+ */
+export function toISODate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+/** True when both `YYYY-MM-DD` strings are set and start is after end (ISO dates compare lexically). */
+export function isDateRangeInvalid(start, end) {
+  return Boolean(start && end && start > end)
+}
+
+/** Supplier payment terms in plain words: "Net 30" -> "Pay within 30 days"; other values are shown as stored. */
+export function formatPaymentTerms(terms) {
+  if (isNil(terms)) return EM_DASH
+  const match = /^net\s*(\d+)$/i.exec(String(terms).trim())
+  return match ? `Pay within ${match[1]} days` : String(terms)
+}
