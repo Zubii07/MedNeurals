@@ -10,7 +10,14 @@ import { cn } from '@/lib/utils'
  */
 export default function StaleBanner({ title, description, to, actionLabel, className }) {
   return (
-    <Alert className={cn('items-center border-warning/40 bg-warning-bg text-[#78350f] *:data-[slot=alert-description]:text-[#92400e]', className)}>
+    <Alert
+      className={cn(
+        'items-center border-warning/40 bg-warning-bg text-[#78350f] *:data-[slot=alert-description]:text-[#92400e]',
+        // Keep long titles clear of the absolutely positioned action button on md+.
+        to && actionLabel && 'md:pr-56',
+        className,
+      )}
+    >
       <TriangleAlert className="text-[#b45309]" aria-hidden="true" />
       <AlertTitle>{title}</AlertTitle>
       {description ? <AlertDescription>{description}</AlertDescription> : null}

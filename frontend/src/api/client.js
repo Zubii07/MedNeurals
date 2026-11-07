@@ -149,3 +149,12 @@ export function errorMessage(error) {
   if (error && typeof error.message === 'string') return error.message
   return 'Something went wrong.'
 }
+
+/**
+ * True for the 404 the prediction endpoints return before any successful run
+ * ("no successful prediction run yet; call POST /predictions/refresh", plan §6.7 / §7.4).
+ * Other 404s (unknown item or store) keep their own `detail` text.
+ */
+export function isNoPredictionRunError(error) {
+  return error instanceof ApiError && error.status === 404 && /prediction run/i.test(error.message)
+}
