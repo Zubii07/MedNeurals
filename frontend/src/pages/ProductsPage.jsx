@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { PackageSearch, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -13,12 +14,35 @@ import ErrorState from '@/components/common/ErrorState'
 import PageHeader from '@/components/common/PageHeader'
 import TablePagination from '@/components/common/TablePagination'
 import ToneBadge from '@/components/common/ToneBadge'
+import MasterDataPanel from '@/components/product/MasterDataPanel'
 import { useProductCategories, useProducts } from '@/api/hooks'
 import { PAGE_SIZES, VED_CLASSES, VED_CLASS_META, enumMeta } from '@/lib/enums'
 import { formatNumber, formatPKR } from '@/lib/format'
 
 const ALL = 'all'
 const HEAD = 'h-9 bg-muted/60 px-2 text-xs font-medium text-muted-foreground first:rounded-l-lg last:rounded-r-lg'
+
+/** "Specifications" opens the item's master data (GET /products/{id}) in a dialog; it is loaded only when opened. */
+function SpecificationsDialog({ item }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button type="button" className="text-xs font-medium text-primary hover:underline">
+          Specifications
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{item.item_name}</DialogTitle>
+          <DialogDescription>
+            {item.item_id} · {item.category_name}
+          </DialogDescription>
+        </DialogHeader>
+        <MasterDataPanel itemId={item.item_id} />
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 /** Read list state from the URL (plan §5.4: filters and pagination live in the query string). */
 function readParams(params) {
@@ -122,6 +146,8 @@ export default function ProductsPage() {
                   <span className="block text-xs text-muted-foreground">
                     {item.item_id}
                     {item.sub_category ? ` · ${item.sub_category}` : ''}
+                    {' · '}
+                    <SpecificationsDialog item={item} />
                   </span>
                 </TableCell>
                 <TableCell className="px-2 py-2.5 text-sm" title={item.category_name}>

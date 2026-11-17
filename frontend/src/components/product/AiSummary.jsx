@@ -1,4 +1,3 @@
-import { Sparkles } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProductExplanation } from '@/api/hooks'
 
@@ -21,14 +20,9 @@ export default function AiSummary({ itemId, enabled, fallback }) {
       </div>
     )
   }
-  const { text, source } = query.data
   return (
     <div className="rounded-xl border border-primary/20 bg-accent/40 px-4 py-3">
-      <p className="text-[15px] leading-relaxed text-foreground">{text}</p>
-      <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Sparkles className="size-3 text-primary" aria-hidden="true" />
-        {source === 'llm' ? 'Written by AI from the figures on this page; it adds no numbers of its own.' : 'Built from the figures on this page.'}
-      </p>
+      <p className="text-[15px] leading-relaxed text-foreground">{query.data.text}</p>
     </div>
   )
 }

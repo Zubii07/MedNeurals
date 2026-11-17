@@ -47,7 +47,9 @@ and do not tell the officer what will certainly happen: the officer decides.
 Say, in this order: how likely a stockout is and at which store; why (stock on hand, daily use, days of cover, the
 next delivery); and the recommended next step with its quantity or purchase order if given.
 Write the way a colleague would speak: quantities with their unit (for example "5000 Roll", "about 8.9 Roll a day"),
-"none on hand" rather than "stock on hand is 0", "in 4 days" rather than "4 days away", and the percentage as "95%".
+"none on hand" rather than "stock on hand is 0", "in 4 days" rather than "4 days away" (and "in 1 day", never "1 days"),
+and the percentage as "95%". A delivery with next_delivery_overdue_by_days is late: say "overdue by 3 days", never a
+negative number of days.
 
 Facts (JSON):
 {facts}
@@ -73,6 +75,21 @@ def _date(value) -> datetime.date | None:
     if value is None or isinstance(value, datetime.date):
         return value
     return datetime.date.fromisoformat(str(value)[:10])
+
+
+def _delivery_timing(delivery_date, prediction_date) -> dict:
+    """Days to the next delivery as separate, always-positive facts, so an overdue order is described as overdue and
+    never as a negative number of days."""
+    if delivery_date is None:
+        return {"next_delivery_in_days": None, "next_delivery_overdue_by_days": None, "next_delivery_status": None}
+    days = (delivery_date - prediction_date).days
+    if days > 0:
+        return {"next_delivery_in_days": days, "next_delivery_overdue_by_days": None,
+                "next_delivery_status": f"expected in {days} day{'s' if days != 1 else ''}"}
+    if days == 0:
+        return {"next_delivery_in_days": 0, "next_delivery_overdue_by_days": None, "next_delivery_status": "due today"}
+    return {"next_delivery_in_days": None, "next_delivery_overdue_by_days": -days,
+            "next_delivery_status": f"overdue by {-days} day{'s' if days != -1 else ''}, still not received"}
 
 
 def build_facts(analysis: dict) -> dict | None:
@@ -112,7 +129,7 @@ def build_facts(analysis: dict) -> dict | None:
         "total_stock_all_stores": _int(stock.get("total_qty")),
         "quantity_on_order": _int((analysis.get("open_purchase_orders") or {}).get("quantity")),
         "next_delivery_date": delivery_date.isoformat() if delivery_date else None,
-        "next_delivery_in_days": (delivery_date - prediction_date).days if delivery_date else None,
+        **_delivery_timing(delivery_date, prediction_date),
         "next_delivery_quantity": _int(next_order["ordered_quantity"]) if next_order else None,
         "next_delivery_purchase_order": next_order["purchase_order_id"] if next_order else None,
         "supplier": (supplier or {}).get("supplier_name"),
@@ -203,8 +220,12 @@ def template_text(f: dict) -> str:
         parts.append(f"{f['item']} has no stockout prediction for this run.")
     parts.append(f"The central store holds {_qty(f['central_store_stock'], unit)}.")
     if f["next_delivery_date"]:
-        when = f"in {f['next_delivery_in_days']} days" if f["next_delivery_in_days"] > 0 else "now overdue" if f["next_delivery_in_days"] < 0 else "today"
-        parts.append(f"The next delivery of {_qty(f['next_delivery_quantity'], unit)} is expected {when}, on {f['next_delivery_date']}.")
+        if f["next_delivery_overdue_by_days"]:
+            parts.append(f"The next delivery of {_qty(f['next_delivery_quantity'], unit)} was due on {f['next_delivery_date']} "
+                         f"and is overdue by {f['next_delivery_overdue_by_days']} days.")
+        else:
+            when = f"in {f['next_delivery_in_days']} days" if f["next_delivery_in_days"] else "today"
+            parts.append(f"The next delivery of {_qty(f['next_delivery_quantity'], unit)} is expected {when}, on {f['next_delivery_date']}.")
     else:
         parts.append("Nothing is on order.")
     action = f["recommended_action"]

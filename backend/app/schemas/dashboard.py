@@ -140,9 +140,18 @@ class HorizonTotal(BaseModel):
     p90_sum: float                  # sum of the sub-store P90s (not a hospital-level P90)
 
 
+class ForecastTrend(BaseModel):
+    """Direction of the item's forecast over its four weeks, from the P50 totals (never from the LLM): the fitted
+    change from the first to the last forecast week relative to their mean; +-threshold_percent counts as stable."""
+    direction: Literal["increasing", "decreasing", "stable"]
+    change_percent: float           # fitted change over the horizon, as % of the mean weekly forecast
+    threshold_percent: float
+
+
 class ItemForecast(BaseModel):
     totals: list[HorizonTotal]
     by_store: list[ForecastRow]
+    trend: ForecastTrend | None     # None with fewer than two forecast weeks or a zero forecast
 
 
 class ItemStockout(BaseModel):

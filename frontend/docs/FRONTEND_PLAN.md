@@ -846,6 +846,18 @@ small bar), Risk badge, "View analysis". Pagination 25/50/100. Counts above the 
 
 ## 7.6 Product Analysis (`/products/:itemId`)
 
+> **Redesigned on 2026-11-18 for the officer.** A compact header (name, id, category, unit and pack, data as-of
+> date) and four sections: 1 Main warning and recommended action (risk level and store, the estimated chance stated
+> as an estimate, the Phase 12 paragraph, "What to do now"). 2 Current inventory (total stock with central and
+> sub-stores apart, stock at the store at risk with what is in transit to it, recent daily use, next expected
+> delivery). 3 Demand forecast (trend pill from `forecast.trend`, one line chart of the last 12 weeks from
+> `GET /demand/weekly` plus the four forecast weeks, the four weekly values). 4 Stock by store (open by default) and,
+> only when an open purchase order exists, incoming supply with its delivery status. Not on this page any more: the
+> per-store risk list and model explanation, the recommendation calculation, the full purchase-order list, supplier
+> statistics (Suppliers section) and master data (a "Specifications" dialog on the Products list). Components:
+> `ProductSummaryHeader`, `MainWarningCard`, `InventorySummary`, `DemandForecastSection`, `StockAndSupplySection`
+> (+ `common/Expandable`). The original item list below is kept for reference.
+
 Sections, in this order:
 1. Header: item name, id, category, VED badge, unit, pack size, unit cost (PKR). Link "Master data" toggles the
    `GET /products/{id}` detail fields and supplier contracts.

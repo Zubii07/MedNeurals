@@ -167,6 +167,7 @@ def test_product_analysis_combines_saved_results_and_context(client):
     assert len(body["forecast"]["by_store"]) == len(SUB_STORES) * 4
     assert [t["horizon"] for t in body["forecast"]["totals"]] == [1, 2, 3, 4]
     assert all(t["p50"] == pytest.approx(70 * len(SUB_STORES)) for t in body["forecast"]["totals"])
+    assert body["forecast"]["trend"] == {"direction": "stable", "change_percent": 0.0, "threshold_percent": 5.0}
     assert body["stockout_risk"]["highest"]["store_id"] == SUB_STORES[1]
     assert body["stockout_risk"]["highest"]["probability"] == 0.3
 
@@ -254,3 +255,14 @@ def test_weekly_demand_returns_complete_monday_weeks(client):
     assert body["end_date"] == "2025-11-30" and body["store_id"] == SUB_STORES[0] and len(body["weeks"]) == 4
     assert client.get("/demand/weekly", params={"item_id": "MED-NOPE"}).status_code == 404
     assert client.get("/demand/weekly", params={"item_id": item, "store_id": "STR-NOPE"}).status_code == 404
+
+
+def test_forecast_trend_direction_from_horizon_totals():
+    trend = dashboard_api.forecast_trend
+    rising = [{"horizon": h, "p50": v} for h, v in zip((1, 2, 3, 4), (100, 104, 108, 112))]
+    assert trend(rising)["direction"] == "increasing" and trend(rising)["change_percent"] == pytest.approx(11.3, abs=0.1)
+    falling = [{"horizon": h, "p50": v} for h, v in zip((4, 3, 2, 1), (90, 95, 100, 105))]      # order does not matter
+    assert trend(falling)["direction"] == "decreasing"
+    flat = [{"horizon": h, "p50": v} for h, v in zip((1, 2, 3, 4), (100, 101, 100, 102))]
+    assert trend(flat)["direction"] == "stable"
+    assert trend([{"horizon": 1, "p50": 5}]) is None and trend([{"horizon": 1, "p50": 0}, {"horizon": 2, "p50": 0}]) is None

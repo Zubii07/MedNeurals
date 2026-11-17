@@ -153,6 +153,24 @@ def list_stockout_risks(
     return {"run": run, "total": total, **page, "items": rows}
 
 
+TREND_THRESHOLD_PERCENT = 5.0
+
+
+def forecast_trend(totals: list[dict], threshold_percent: float = TREND_THRESHOLD_PERCENT) -> dict | None:
+    """Increasing / decreasing / stable from the horizon P50 totals: least-squares slope over the equally spaced
+    weeks, expressed as the change from the first to the last week relative to the mean. Display only."""
+    values = [float(t["p50"]) for t in sorted(totals, key=lambda t: t["horizon"])]
+    n = len(values)
+    mean = sum(values) / n if n else 0.0
+    if n < 2 or mean <= 0:
+        return None
+    x_mean = (n - 1) / 2
+    slope = sum((i - x_mean) * (v - mean) for i, v in enumerate(values)) / sum((i - x_mean) ** 2 for i in range(n))
+    change = slope * (n - 1) / mean * 100
+    direction = "increasing" if change > threshold_percent else "decreasing" if change < -threshold_percent else "stable"
+    return {"direction": direction, "change_percent": round(change, 1) + 0.0, "threshold_percent": threshold_percent}
+
+
 def _current_stock(conn: Connection, item_id: str) -> dict | None:
     rows = conn.execute(text("""
         SELECT d.date, d.store_id, s.store_name, d.closing_qty
@@ -233,7 +251,7 @@ def build_product_analysis(conn: Connection, item_id: str) -> dict | None:
                             {"run": rec_set["model_run_id"], "id": item_id}).mappings().all()
     result.update({
         "prediction_run": run,
-        "forecast": {"totals": list(totals.values()), "by_store": forecasts},
+        "forecast": {"totals": list(totals.values()), "by_store": forecasts, "trend": forecast_trend(list(totals.values()))},
         "stockout_risk": {"highest": risks[0] if risks else None, "by_store": risks},
         "recommendation": {
             "recommendation_set": rec_set,

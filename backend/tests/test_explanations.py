@@ -17,7 +17,8 @@ FACTS = {
     "stockout_probability_percent": 95, "risk_level": "high", "store_stock_on_hand": 0, "store_daily_use": 8.9,
     "store_days_of_cover": 0, "store_stockout_days_last_28": 4, "central_store_stock": 0,
     "total_stock_all_stores": 136, "quantity_on_order": 5000, "next_delivery_date": "2025-12-11",
-    "next_delivery_in_days": 4, "next_delivery_quantity": 5000, "next_delivery_purchase_order": "PO2-009169",
+    "next_delivery_in_days": 4, "next_delivery_overdue_by_days": None, "next_delivery_status": "expected in 4 days",
+    "next_delivery_quantity": 5000, "next_delivery_purchase_order": "PO2-009169",
     "supplier": "Healing Touch Consumables", "supplier_lead_time_days": 11.0, "expected_demand_next_4_weeks": 1843,
     "recommended_action": "Expedite the open purchase order", "recommended_priority": "high",
     "recommended_purchase_quantity": None, "purchase_order_to_expedite": "PO2-009169", "transfer_count": 7,
@@ -127,6 +128,15 @@ def test_facts_handle_dates_and_missing_sections():
     }
     facts = build_facts(analysis)
     assert facts["next_delivery_in_days"] == 8 and facts["next_delivery_date"] == "2025-12-15"
+    assert facts["next_delivery_overdue_by_days"] is None and facts["next_delivery_status"] == "expected in 8 days"
+    # an order expected before the prediction date and still open is overdue, never "in -3 days"
+    late = {**analysis, "open_purchase_orders": {**analysis["open_purchase_orders"], "orders": [
+        {**analysis["open_purchase_orders"]["orders"][0], "expected_delivery_date": datetime.date(2025, 12, 4)}]}}
+    late_facts = build_facts(late)
+    assert late_facts["next_delivery_in_days"] is None and late_facts["next_delivery_overdue_by_days"] == 3
+    assert late_facts["next_delivery_status"].startswith("overdue by 3 days")
+    assert "overdue by 3 days" in template_text(late_facts) and "-3" not in template_text(late_facts)
+    assert check_text(template_text(late_facts), late_facts) is None
     assert facts["highest_risk_store"] is None and facts["recommended_action"] is None
     assert check_text(template_text(facts), facts) is None
     assert build_facts({**analysis, "prediction_run": None}) is None
