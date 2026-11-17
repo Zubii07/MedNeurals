@@ -4,6 +4,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
 from app.database.connection import get_db
 from app.models import DailyInventory, Demand, MedicalItem, PurchaseOrder, Supplier, SupplierItem
+from app.ml.features import CENTRAL_STORE
 from app.schemas.reads import (
     DemandRow,
     InventoryRow,
@@ -12,7 +13,9 @@ from app.schemas.reads import (
     ProductSummary,
     PurchaseOrderRow,
     SupplierRow,
+    WeeklyDemand,
 )
+from sqlalchemy import text
 
 # Read-only views of the imported tables, used to verify the data in PostgreSQL. No aggregation here.
 router = APIRouter()
@@ -121,6 +124,44 @@ def list_demand(
     if end_date:
         query = query.where(Demand.demand_date <= end_date)
     return paginate(db, query, page)
+
+
+@router.get("/demand/weekly", response_model=WeeklyDemand, tags=["demand"])
+def weekly_demand(
+    item_id: str,
+    store_id: str | None = Query(None, description="One sub-store; default: all sub-stores together"),
+    weeks: int = Query(26, ge=4, le=104, description="Number of complete Mon-Sun weeks to return"),
+    end_date: datetime.date | None = Query(None, description="Last day considered (default: the item's latest "
+                                           "daily_inventory date). Only complete weeks ending on or before it count."),
+    db: Session = Depends(get_db),
+):
+    """Weekly demand history of one item for the history-vs-forecast chart: the same daily_inventory.demand_qty totals
+    the forecast is built from (app/services/feature_inputs.demand_history), summed per Monday week. Complete weeks
+    only, oldest first, weeks without rows as 0. The central store is excluded: its demand_qty is replenishment of the
+    sub-stores, not consumption."""
+    item = db.get(MedicalItem, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail=f"Product {item_id} not found")
+    if store_id and db.execute(text("SELECT 1 FROM stores WHERE store_id = :s"), {"s": store_id}).scalar() is None:
+        raise HTTPException(status_code=404, detail=f"Store {store_id} not found")
+    if end_date is None:
+        end_date = db.scalar(select(func.max(DailyInventory.date)).where(DailyInventory.item_id == item_id))
+    base = {"item_id": item_id, "item_name": item.item_name, "unit": item.uom, "store_id": store_id}
+    if end_date is None:
+        return {**base, "end_date": None, "weeks": []}
+
+    last_sunday = end_date - datetime.timedelta(days=(end_date.weekday() + 1) % 7)
+    first_monday = last_sunday - datetime.timedelta(days=7 * weeks - 1)
+    store_filter = "store_id = :store" if store_id else "store_id <> :store"
+    rows = db.execute(text(f"""
+        SELECT date_trunc('week', date)::date AS week_start, sum(demand_qty) AS demand_qty
+        FROM daily_inventory
+        WHERE item_id = :item AND {store_filter} AND date BETWEEN :start AND :end
+        GROUP BY 1"""), {"item": item_id, "store": store_id or CENTRAL_STORE, "start": first_monday, "end": last_sunday})
+    by_week = {r.week_start: float(r.demand_qty) for r in rows}
+    points = [{"week_start": first_monday + datetime.timedelta(weeks=i),
+               "demand_qty": by_week.get(first_monday + datetime.timedelta(weeks=i), 0.0)} for i in range(weeks)]
+    return {**base, "end_date": last_sunday, "weeks": points}
 
 
 @router.get("/purchase-orders", response_model=Page[PurchaseOrderRow], tags=["purchase orders"])

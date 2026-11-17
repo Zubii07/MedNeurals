@@ -18,7 +18,7 @@ import { useRecommendations } from '@/api/hooks'
 import { errorMessage } from '@/api/client'
 import { ALL, useUrlFilters } from '@/hooks/use-url-filters'
 import { ACTIONS, ACTION_META, PRIORITIES, PRIORITY_META, RECOMMENDATION_STATUSES, RECOMMENDATION_STATUS_META, SUB_STORES } from '@/lib/enums'
-import { formatDate, formatDateTime, formatNumber, runLabel } from '@/lib/format'
+import { formatDate, formatDateTime, formatNumber } from '@/lib/format'
 
 const FILTER_KEYS = ['action', 'priority', 'status', 'store_id', 'item_id']
 
@@ -93,9 +93,8 @@ export default function RecommendationsPage() {
           icon={Sparkles}
           loading={query.isPending}
           items={[
-            { label: 'Run', value: runLabel(page?.model_run_id) },
-            { label: 'Prediction date', value: formatDate(page?.prediction_date) },
-            { label: 'Data cutoff', value: formatDate(page?.data_cutoff_date) },
+            { label: 'Predictions made on', value: formatDate(page?.prediction_date) },
+            { label: 'Data up to', value: formatDate(page?.data_cutoff_date) },
             { label: 'Generated', value: formatDateTime(page?.generated_at) },
           ]}
         />
@@ -103,7 +102,7 @@ export default function RecommendationsPage() {
 
       {stale ? (
         <StaleBanner
-          title={`These recommendations belong to an older prediction run (${runLabel(page.model_run_id)}). Latest run: ${runLabel(page.latest_prediction_run_id)}.`}
+          title="These recommendations come from an older prediction run. Generate new ones for the latest predictions."
           description={page.latest_prediction_date ? `Latest prediction date ${formatDate(page.latest_prediction_date)}.` : undefined}
           to="/data"
           actionLabel="Generate recommendations"

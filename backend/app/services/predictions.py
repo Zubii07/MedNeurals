@@ -18,6 +18,11 @@ RISK_URGENT = "URGENT"   # probability >= threshold_urgent
 RISK_REVIEW = "REVIEW"   # threshold_review <= probability < threshold_urgent
 RISK_LOW = "LOW"
 
+# Snapshot values saved next to every stockout probability (columns of build_stockout_snapshots) so the UI can explain
+# the risk: what was on hand, how fast it is used, what is coming in, and the recent stockout history.
+STOCKOUT_DRIVERS = ["stock_on_hand", "in_transit_qty", "adu_28", "days_of_cover", "incoming_within_n", "fc_next_n_p50",
+                    "stockout_days_last_28", "central_stock_qty", "days_since_stockout", "supplier_lt_mean"]
+
 DATE_COLUMNS = {
     "demand": ["Demand_Date"],
     "inventory": ["date"],
@@ -101,6 +106,11 @@ def run_predictions(inputs: dict, data_cutoff_date: datetime.date, artifacts: Mo
     stockout = latest[["store_id", "item_id"]].copy()
     stockout["probability"] = probability
     stockout["risk_level"] = risk_level(probability, artifacts.threshold_review, artifacts.threshold_urgent)
+    # 7. the drivers, as the model saw them. features.py writes days_of_cover = 999 when there is no demand; that is a
+    # sentinel for the model, not a number of days, so it is saved as NULL.
+    drivers = latest[STOCKOUT_DRIVERS].astype("float64")
+    drivers.loc[latest["adu_28"].fillna(0) <= 0, "days_of_cover"] = np.nan
+    stockout = pd.concat([stockout, drivers], axis=1)
 
     forecasts = (fc.rename(columns={"Store_ID": "store_id", "Item_ID": "item_id"})
                    [["store_id", "item_id", "horizon", "target_week", "p50", "p90"]])

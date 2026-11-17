@@ -288,3 +288,55 @@ export function useImportData() {
     },
   })
 }
+
+/* ------------------------------------------------------------------ models */
+
+/**
+ * GET /predictions/models → ModelDetails: what the trained models are and how they scored on their held-out test
+ * period (thresholds, precision / recall per band, demand WAPE and P90 coverage). Static per artifact version.
+ */
+export function useModelDetails(options) {
+  return useQuery({
+    queryKey: ['predictions', 'models'],
+    queryFn: ({ signal }) => apiGet('/predictions/models', undefined, { signal }),
+    staleTime: 60 * 60_000,
+    ...options,
+  })
+}
+
+/* ------------------------------------------------------------------ demand */
+
+/**
+ * GET /demand/weekly → WeeklyDemand: complete Mon–Sun weeks of demand for one item (all sub-stores, or one store),
+ * oldest first, the history line of the demand chart. `end_date` should be the run's prediction date so the last
+ * history week is the one just before forecast week H1.
+ * @param {{ item_id: string, store_id?: string, weeks?: number, end_date?: string }} params
+ */
+export function useWeeklyDemand(params, options) {
+  return useQuery({
+    queryKey: ['demand', 'weekly', params],
+    queryFn: ({ signal }) => apiGet('/demand/weekly', params, { signal }),
+    enabled: Boolean(params?.item_id),
+    staleTime: 10 * 60_000,
+    ...options,
+  })
+}
+
+/* ------------------------------------------------------------ explanations */
+
+/**
+ * POST /products/{item_id}/explanation → ProductExplanation: one paragraph that restates the item's stored results.
+ * POST because the first call stores the paragraph for the current run; later calls return the same text, so it is
+ * safe to fetch like a query. The first call may take a few seconds (one LLM request).
+ * @param {string | undefined} itemId
+ */
+export function useProductExplanation(itemId, options) {
+  return useQuery({
+    queryKey: ['products', 'explanation', itemId],
+    queryFn: () => apiPost(`/products/${encodeURIComponent(itemId)}/explanation`, undefined, { timeoutMs: 45_000 }),
+    enabled: Boolean(itemId),
+    staleTime: 10 * 60_000,
+    retry: false,
+    ...options,
+  })
+}

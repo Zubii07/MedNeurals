@@ -1,5 +1,4 @@
 import { Link, useParams } from 'react-router-dom'
-import { Activity } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import ErrorState from '@/components/common/ErrorState'
@@ -11,7 +10,7 @@ import StockoutRiskSection from '@/components/product/StockoutRiskSection'
 import ForecastSection from '@/components/product/ForecastSection'
 import LiveContextSection from '@/components/product/LiveContextSection'
 import { useProductAnalysis } from '@/api/hooks'
-import { formatDate, formatDateTime, runLabel } from '@/lib/format'
+import { formatDate } from '@/lib/format'
 
 function PageSkeleton() {
   return (
@@ -21,7 +20,8 @@ function PageSkeleton() {
         <Skeleton className="h-8 w-2/3" />
         <Skeleton className="h-4 w-1/2" />
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Skeleton className="h-32" />
         <Skeleton className="h-32" />
         <Skeleton className="h-32" />
         <Skeleton className="h-32" />
@@ -42,42 +42,31 @@ function PageSkeleton() {
   )
 }
 
-/** Footer: the prediction run the saved sections come from (plan §7.6 item 6). */
+/** Footer: when the predictions on this page were made (plain words; model details live on Data & Predictions). */
 function RunFooter({ run }) {
   if (!run) {
     return (
       <p className="text-xs text-muted-foreground">
-        No successful prediction run yet.{' '}
+        No predictions yet.{' '}
         <Link to="/data" className="font-medium text-primary hover:underline">
           Run a prediction refresh →
         </Link>
       </p>
     )
   }
-  const model = (info) => (info ? `${info.model_name} v${info.model_version} (${runLabel(info.model_run_id)})` : '—')
-  const facts = [
-    ['Data cutoff', formatDate(run.data_cutoff_date)],
-    ['Prediction date', formatDate(run.prediction_date)],
-    ['Demand model', model(run.demand_forecast)],
-    ['Stockout model', model(run.stockout)],
-    ['Completed', formatDateTime(run.completed_at)],
-  ]
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-border/70 bg-card/60 px-4 py-3 text-xs">
-      <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
-        <Activity className="size-3.5 text-primary" aria-hidden="true" />
-        Prediction run
-      </span>
-      {facts.map(([label, value]) => (
-        <span key={label} className="text-muted-foreground">
-          {label} <span className="font-medium text-foreground">{value}</span>
-        </span>
-      ))}
-    </div>
+    <p className="text-xs text-muted-foreground">
+      Predictions made on <span className="font-medium text-foreground">{formatDate(run.prediction_date)}</span> from data up to{' '}
+      <span className="font-medium text-foreground">{formatDate(run.data_cutoff_date)}</span>.
+    </p>
   )
 }
 
-/** Product Analysis (`/products/:itemId`, plan §7.6) – one read-only decision view built from GET /products/{id}/analysis. */
+/**
+ * Product Analysis (`/products/:itemId`, plan §7.6) – one read-only decision view built from GET /products/{id}/analysis:
+ * stock, next delivery, stockout risk and recommended action on top, then what to do, could we run out, and how much
+ * we will need.
+ */
 export default function ProductAnalysisPage() {
   const { itemId } = useParams()
   const { data, isPending, isError, error, refetch, isFetching } = useProductAnalysis(itemId)
@@ -101,9 +90,9 @@ export default function ProductAnalysisPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
-          <RecommendationSection recommendation={data.recommendation} unit={unit} />
-          <StockoutRiskSection stockoutRisk={data.stockout_risk} itemId={data.item.item_id} />
-          <ForecastSection forecast={data.forecast} unit={unit} itemId={data.item.item_id} />
+          <RecommendationSection recommendation={data.recommendation} unit={unit} itemId={data.item.item_id} />
+          <StockoutRiskSection stockoutRisk={data.stockout_risk} itemId={data.item.item_id} itemName={data.item.item_name} unit={unit} />
+          <ForecastSection forecast={data.forecast} unit={unit} itemId={data.item.item_id} predictionDate={data.prediction_run?.prediction_date ?? null} />
         </div>
         <div className="min-w-0">
           <LiveContextSection analysis={data} />

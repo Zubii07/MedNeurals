@@ -1,4 +1,4 @@
-import { formatPercent } from '@/lib/format'
+import { formatProbability } from '@/lib/format'
 
 /** Probability cell with a small bar (plan §7.2). */
 export default function ProbabilityBar({ probability }) {
@@ -8,7 +8,7 @@ export default function ProbabilityBar({ probability }) {
       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
         <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
       </span>
-      <span className="w-14 text-right font-semibold tabular-nums">{formatPercent(probability)}</span>
+      <span className="w-14 text-right font-semibold tabular-nums">{formatProbability(probability)}</span>
     </div>
   )
 }

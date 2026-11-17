@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom'
-import { ArrowLeftRight, ChevronRight, RefreshCw, Truck, Upload } from 'lucide-react'
+import { ArrowLeftRight, ChevronRight, ShieldAlert, Truck, Upload } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 /** Navigation-only shortcuts (plan §4) – nothing here writes to the backend. */
 const ACTIONS = [
-  { label: 'Run prediction refresh', to: '/data', icon: RefreshCw },
-  { label: 'Import new data', to: '/data', icon: Upload },
-  { label: 'Check supplier performance', to: '/suppliers', icon: Truck },
-  { label: 'View transfer recommendations', to: '/recommendations?action=TRANSFER', icon: ArrowLeftRight },
+  { label: 'All stockout risks', to: '/stockout-risks', icon: ShieldAlert },
+  { label: 'Store transfers', to: '/recommendations?action=TRANSFER', icon: ArrowLeftRight },
+  { label: 'Supplier performance', to: '/suppliers', icon: Truck },
+  { label: 'Import & refresh data', to: '/data', icon: Upload },
 ]
 
 export default function QuickActions() {

@@ -19,13 +19,13 @@ from app.models.predictions import (
     StockoutPrediction,
 )
 from app.services.feature_inputs import prediction_date_for
-from app.services.predictions import PredictionError, PredictionRun, predict
+from app.services.predictions import STOCKOUT_DRIVERS, PredictionError, PredictionRun, predict
 
 runs = ModelRun.__table__
 
 FORECAST_COLUMNS = ["model_run_id", "store_id", "item_id", "prediction_date", "horizon", "target_week", "p50", "p90"]
 STOCKOUT_COLUMNS = ["model_run_id", "store_id", "item_id", "prediction_date", "horizon_days", "probability",
-                    "risk_level", "threshold_review", "threshold_urgent"]
+                    "risk_level", "threshold_review", "threshold_urgent"] + STOCKOUT_DRIVERS
 
 
 def latest_data_cutoff(conn: Connection) -> datetime.date | None:

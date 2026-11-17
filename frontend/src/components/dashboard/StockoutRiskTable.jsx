@@ -7,7 +7,7 @@ import EmptyState from '@/components/common/EmptyState'
 import ErrorState from '@/components/common/ErrorState'
 import WidgetCard from '@/components/common/WidgetCard'
 import { RiskBadge } from '@/components/common/ToneBadge'
-import { formatPercent } from '@/lib/format'
+import { formatProbability } from '@/lib/format'
 import { storeShortName } from '@/lib/enums'
 
 const HEAD_CLASSES = 'h-9 bg-muted/60 px-2 text-xs font-medium text-muted-foreground first:rounded-l-lg last:rounded-r-lg'
@@ -27,12 +27,12 @@ function TableSkeleton({ rows = 5 }) {
 }
 
 /**
- * "Stockout Risk Centre" widget: top 5 store×item rows by probability (plan §4).
+ * "Most urgent stockout alerts" widget: the store×item rows with the highest stockout probability (plan §4).
  * Columns: Item (name + id), Store, Probability, Risk, Action "View analysis".
  *
- * @param {{ query: import('@tanstack/react-query').UseQueryResult<import('@/api/shapes').StockoutRiskPage>, hasRun: boolean }} props
+ * @param {{ query: import('@tanstack/react-query').UseQueryResult<import('@/api/shapes').StockoutRiskPage>, hasRun: boolean, rows?: number }} props
  */
-export default function StockoutRiskTable({ query, hasRun }) {
+export default function StockoutRiskTable({ query, hasRun, rows: rowCount = 5 }) {
   const { data, isPending, isError, error, refetch, isFetching } = query
   const rows = data?.items ?? []
 
@@ -40,7 +40,7 @@ export default function StockoutRiskTable({ query, hasRun }) {
   if (!hasRun || (isError && error?.status === 404)) {
     body = <EmptyState icon={ShieldCheck} title="No stockout predictions yet." description="Run a prediction refresh to see store × item risks." to="/data" linkLabel="Go to Data & Predictions" compact />
   } else if (isPending) {
-    body = <TableSkeleton />
+    body = <TableSkeleton rows={rowCount} />
   } else if (isError) {
     body = <ErrorState error={error} onRetry={refetch} retrying={isFetching} compact />
   } else if (rows.length === 0) {
@@ -70,7 +70,7 @@ export default function StockoutRiskTable({ query, hasRun }) {
                 <span className="block max-w-[80px] truncate">{storeShortName(row.store_id)}</span>
                 <span className="block text-xs text-muted-foreground">{row.store_id}</span>
               </TableCell>
-              <TableCell className="px-2 py-3.5 text-right text-sm font-semibold tabular-nums text-foreground">{formatPercent(row.probability)}</TableCell>
+              <TableCell className="px-2 py-3.5 text-right text-sm font-semibold tabular-nums text-foreground">{formatProbability(row.probability)}</TableCell>
               <TableCell className="px-2 py-3.5">
                 <RiskBadge level={row.risk_level} className="px-2" />
               </TableCell>
@@ -88,12 +88,8 @@ export default function StockoutRiskTable({ query, hasRun }) {
 
   return (
     <WidgetCard
-      title="Stockout Risk Centre"
-      description={
-        data?.total != null && hasRun
-          ? `Highest stockout probability within 14 days · ${data.total.toLocaleString()} store × item rows predicted`
-          : 'Highest stockout probability within 14 days, per store × item.'
-      }
+      title="Most urgent stockout alerts"
+      description="Items most likely to run out at a store within the next 14 days. Open one to see why and what to do."
       to="/stockout-risks"
       contentClassName="px-3 [&>[data-slot=table-container]]:flex-1"
     >

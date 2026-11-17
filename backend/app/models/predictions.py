@@ -98,6 +98,18 @@ class StockoutPrediction(Base):
     # The two saved thresholds risk_level was derived from (the plan's threshold_used).
     threshold_review: Mapped[float] = mapped_column(Float)
     threshold_urgent: Mapped[float] = mapped_column(Float)
+    # Driver values of the snapshot the probability was computed from (app/ml/features.py STOCKOUT_FEATURES /
+    # STOCKOUT_EXTRA), saved so the UI can say why the item is at risk. NULL on rows saved before these existed.
+    stock_on_hand: Mapped[float | None] = mapped_column(Float)
+    in_transit_qty: Mapped[float | None] = mapped_column(Float)
+    adu_28: Mapped[float | None] = mapped_column(Float)              # average daily demand over the last 28 days
+    days_of_cover: Mapped[float | None] = mapped_column(Float)       # stock_on_hand / adu_28; NULL when adu_28 is 0
+    incoming_within_n: Mapped[float | None] = mapped_column(Float)   # open purchase-order quantity due within horizon_days
+    fc_next_n_p50: Mapped[float | None] = mapped_column(Float)       # forecast demand (P50) over horizon_days
+    stockout_days_last_28: Mapped[float | None] = mapped_column(Float)
+    central_stock_qty: Mapped[float | None] = mapped_column(Float)
+    days_since_stockout: Mapped[float | None] = mapped_column(Float) # NULL when the store never ran out of the item
+    supplier_lt_mean: Mapped[float | None] = mapped_column(Float)    # preferred supplier's mean lead time, days
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     model_run: Mapped[Any] = relationship("ModelRun")

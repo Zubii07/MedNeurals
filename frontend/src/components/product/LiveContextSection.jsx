@@ -127,7 +127,7 @@ export default function LiveContextSection({ analysis }) {
   const suppliers = analysis.preferred_suppliers ?? []
   return (
     <div className="space-y-4">
-      <p className="px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Live data · not part of the prediction run</p>
+      <p className="px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Current stock, orders and supplier</p>
       <CurrentStockCard currentStock={analysis.current_stock} unit={unit} />
       <OpenOrdersCard openOrders={analysis.open_purchase_orders} unit={unit} />
       {suppliers.length === 0 ? (

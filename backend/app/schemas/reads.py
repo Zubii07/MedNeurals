@@ -120,3 +120,19 @@ class SupplierRow(ReadModel):
     lead_time_variability: str
     minimum_order_value: float
     active_flag: bool
+
+
+class WeeklyDemandPoint(BaseModel):
+    week_start: datetime.date       # Monday of the week
+    demand_qty: float               # units demanded Mon-Sun (0 when nothing was recorded)
+
+
+class WeeklyDemand(BaseModel):
+    """GET /demand/weekly: complete Mon-Sun weeks of demand for one item, oldest first, from daily_inventory.demand_qty
+    (the same source the forecast is built from). All sub-stores together unless store_id is given."""
+    item_id: str
+    item_name: str
+    unit: str
+    store_id: str | None
+    end_date: datetime.date | None  # Sunday of the last week returned (None when the item has no inventory rows)
+    weeks: list[WeeklyDemandPoint]

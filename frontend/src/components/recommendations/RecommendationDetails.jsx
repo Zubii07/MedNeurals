@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import StatTile from '@/components/common/StatTile'
-import { EM_DASH, formatDecimal, formatLeadTime, formatNumber, formatPercent, formatQuantity } from '@/lib/format'
+import { EM_DASH, formatDecimal, formatLeadTime, formatNumber, formatProbability, formatQuantity } from '@/lib/format'
 
 /**
  * Expanded recommendation row (plan §7.3, reduced to the inputs that explain the advice): the full `reason`
@@ -28,7 +28,7 @@ export default function RecommendationDetails({ row }) {
           {d.purchase_order_id ? <StatTile label="PO to expedite" value={<span className="font-mono">{d.purchase_order_id}</span>} /> : null}
           <StatTile label="Daily demand P50" value={d.daily_demand_p50 != null ? `${formatDecimal(d.daily_demand_p50, 1)} ${unit ?? ''}`.trim() : EM_DASH} />
           <StatTile label="Lead time" value={d.lead_time_days != null ? formatLeadTime(d.lead_time_days, d.lead_time_std, d.lead_time_sample_size) : EM_DASH} />
-          <StatTile label="Stockout probability" value={formatPercent(d.stockout_probability)} tone={d.stockout_probability != null && d.stockout_probability >= 0.2126 ? 'danger' : undefined} />
+          <StatTile label="Stockout probability" value={formatProbability(d.stockout_probability)} tone={d.stockout_probability != null && d.stockout_probability >= 0.2126 ? 'danger' : undefined} />
           <StatTile
             label="Supplier"
             value={

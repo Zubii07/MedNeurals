@@ -788,6 +788,14 @@ export interface ImportResult {
 
 ## 7.1 Dashboard (`/`)
 
+> **Simplified on 2026-11-17 (officer-first dashboard).** The §3.1/§4 widgets below were reduced to what helps a
+> procurement officer decide: three KPI cards (urgent stockout risk, items needing action, open purchase orders), the
+> "Most urgent stockout alerts" table (top 10, `useStockoutRisks({limit: 10})`), "Top purchase recommendations" and
+> Quick actions. Removed: the risk-mix donut, the at-risk-by-sub-store chart, the recommendation spotlight, the
+> prediction-run card and the promo banner (model names, versions, run ids and thresholds now appear only on
+> Data & Predictions). Product Analysis shows stock on hand, next delivery, stockout risk and recommended action on
+> top; formula outputs sit behind "Show calculation details". The original spec is kept below for reference.
+
 Follow §3.1 layout and §4 mapping. Queries (in parallel):
 `useDashboardSummary()`, `useStockoutRisks({limit: 5})`, `useStockoutRisks({risk_level: 'URGENT', limit: 1000})`,
 `useStockoutRisks({risk_level: 'REVIEW', limit: 1000})`, `useRecommendations({limit: 1})`,

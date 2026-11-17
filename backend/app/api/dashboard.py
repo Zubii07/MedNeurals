@@ -9,7 +9,8 @@ from app.api.reads import pagination
 from app.api.recommendations import ROW_ORDER, ROW_QUERY, recommendation_row
 from app.database.connection import engine
 from app.ml.features import CENTRAL_STORE
-from app.schemas.dashboard import DashboardSummary, ForecastPage, ProductAnalysis, StockoutRiskPage
+from app.schemas.dashboard import DashboardSummary, ForecastPage, ProductAnalysis, ProductExplanation, StockoutRiskPage
+from app.services.explanations import ExplanationUnavailable, explain_item
 from app.services.model_runs import latest_completed_run_id, latest_data_cutoff, run_status
 from app.services.recommendation_rules import open_purchase_orders
 from app.services.recommendations import latest_recommendation_run_id
@@ -29,7 +30,9 @@ FORECAST_QUERY = """
     JOIN stores s ON s.store_id = f.store_id"""
 STOCKOUT_QUERY = """
     SELECT p.item_id, i.item_name, p.store_id, s.store_name, p.probability, p.risk_level, p.horizon_days,
-           p.threshold_review, p.threshold_urgent, p.model_run_id
+           p.threshold_review, p.threshold_urgent, p.model_run_id,
+           p.stock_on_hand, p.in_transit_qty, p.adu_28, p.days_of_cover, p.incoming_within_n, p.fc_next_n_p50,
+           p.stockout_days_last_28, p.central_stock_qty, p.days_since_stockout, p.supplier_lt_mean
     FROM stockout_predictions p
     JOIN medical_items i ON i.item_id = p.item_id
     JOIN stores s ON s.store_id = p.store_id"""
@@ -190,55 +193,78 @@ def _preferred_suppliers(conn: Connection, item_id: str, as_of) -> list[dict]:
     return out
 
 
-@router.get("/products/{item_id}/analysis", response_model=ProductAnalysis, tags=["products"])
-def product_analysis(item_id: str):
+def build_product_analysis(conn: Connection, item_id: str) -> dict | None:
     """One item: saved forecasts, stockout risks and recommendation of the latest successful prediction run, plus
     contextual live data (current stock, open purchase orders, preferred supplier statistics). Nothing is
-    recalculated: recommendation values are the persisted Phase 9 rows."""
-    with engine.connect() as conn:
-        item = conn.execute(text("SELECT * FROM medical_items WHERE item_id = :id"), {"id": item_id}).mappings().one_or_none()
-        if item is None:
-            raise HTTPException(status_code=404, detail=f"Product {item_id} not found")
-        stock = _current_stock(conn, item_id)
-        result = {
-            "item": dict(item), "prediction_run": None, "forecast": None, "stockout_risk": None, "recommendation": None,
-            "current_stock": stock,
-            "open_purchase_orders": _open_orders(conn, item_id, stock["as_of_date"]) if stock else None,
-        }
-        run = _latest_run(conn)
-        result["preferred_suppliers"] = _preferred_suppliers(conn, item_id, run["prediction_date"] if run else None)
-        if run is None:
-            return result
+    recalculated: recommendation values are the persisted Phase 9 rows. None when the item does not exist."""
+    item = conn.execute(text("SELECT * FROM medical_items WHERE item_id = :id"), {"id": item_id}).mappings().one_or_none()
+    if item is None:
+        return None
+    stock = _current_stock(conn, item_id)
+    result = {
+        "item": dict(item), "prediction_run": None, "forecast": None, "stockout_risk": None, "recommendation": None,
+        "current_stock": stock,
+        "open_purchase_orders": _open_orders(conn, item_id, stock["as_of_date"]) if stock else None,
+    }
+    run = _latest_run(conn)
+    result["preferred_suppliers"] = _preferred_suppliers(conn, item_id, run["prediction_date"] if run else None)
+    if run is None:
+        return result
 
-        forecasts = conn.execute(text(f"{FORECAST_QUERY} WHERE f.model_run_id = :run AND f.item_id = :id "
-                                      "ORDER BY f.horizon, f.store_id"),
-                                 {"run": run["demand_forecast"]["model_run_id"], "id": item_id}).mappings()
-        forecasts = [dict(f) for f in forecasts]
-        totals = {}
-        for f in forecasts:
-            t = totals.setdefault(f["horizon"], {"horizon": f["horizon"], "target_week": f["target_week"],
-                                                 "p50": 0.0, "p90_sum": 0.0})
-            t["p50"] += f["p50"]
-            t["p90_sum"] += f["p90"]
-        risks = conn.execute(text(f"{STOCKOUT_QUERY} WHERE p.model_run_id = :run AND p.item_id = :id "
-                                  "ORDER BY p.probability DESC, p.store_id"),
-                             {"run": run["stockout"]["model_run_id"], "id": item_id}).mappings()
-        risks = [dict(r) for r in risks]
+    forecasts = conn.execute(text(f"{FORECAST_QUERY} WHERE f.model_run_id = :run AND f.item_id = :id "
+                                  "ORDER BY f.horizon, f.store_id"),
+                             {"run": run["demand_forecast"]["model_run_id"], "id": item_id}).mappings()
+    forecasts = [dict(f) for f in forecasts]
+    totals = {}
+    for f in forecasts:
+        t = totals.setdefault(f["horizon"], {"horizon": f["horizon"], "target_week": f["target_week"],
+                                             "p50": 0.0, "p90_sum": 0.0})
+        t["p50"] += f["p50"]
+        t["p90_sum"] += f["p90"]
+    risks = conn.execute(text(f"{STOCKOUT_QUERY} WHERE p.model_run_id = :run AND p.item_id = :id "
+                              "ORDER BY p.probability DESC, p.store_id"),
+                         {"run": run["stockout"]["model_run_id"], "id": item_id}).mappings()
+    risks = [dict(r) for r in risks]
 
-        rec_set = _recommendation_set(conn, run)
-        rows = []
-        if rec_set["status"] == "current":
-            rows = conn.execute(text(f"{ROW_QUERY} WHERE r.model_run_id = :run AND r.item_id = :id ORDER BY {ROW_ORDER}"),
-                                {"run": rec_set["model_run_id"], "id": item_id}).mappings().all()
-        result.update({
-            "prediction_run": run,
-            "forecast": {"totals": list(totals.values()), "by_store": forecasts},
-            "stockout_risk": {"highest": risks[0] if risks else None, "by_store": risks},
-            "recommendation": {
-                "recommendation_set": rec_set,
-                "item_status": "set_missing" if rec_set["status"] == "missing" else
-                               "available" if rows else "item_not_included",
-                "rows": [recommendation_row(r) for r in rows],
-            },
-        })
+    rec_set = _recommendation_set(conn, run)
+    rows = []
+    if rec_set["status"] == "current":
+        rows = conn.execute(text(f"{ROW_QUERY} WHERE r.model_run_id = :run AND r.item_id = :id ORDER BY {ROW_ORDER}"),
+                            {"run": rec_set["model_run_id"], "id": item_id}).mappings().all()
+    result.update({
+        "prediction_run": run,
+        "forecast": {"totals": list(totals.values()), "by_store": forecasts},
+        "stockout_risk": {"highest": risks[0] if risks else None, "by_store": risks},
+        "recommendation": {
+            "recommendation_set": rec_set,
+            "item_status": "set_missing" if rec_set["status"] == "missing" else
+                           "available" if rows else "item_not_included",
+            "rows": [recommendation_row(r) for r in rows],
+        },
+    })
     return result
+
+
+@router.get("/products/{item_id}/analysis", response_model=ProductAnalysis, tags=["products"])
+def product_analysis(item_id: str):
+    """GET view of build_product_analysis (404 for an unknown item)."""
+    with engine.connect() as conn:
+        result = build_product_analysis(conn, item_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Product {item_id} not found")
+    return result
+
+
+@router.post("/products/{item_id}/explanation", response_model=ProductExplanation, tags=["products"])
+def product_explanation(item_id: str):
+    """One short paragraph for the officer that puts the item's stored results into words (Phase 12, rule 8): written
+    on first request for the latest prediction run and reused until the next refresh. POST because the first call
+    stores the paragraph; it never runs a model or changes a recommendation."""
+    with engine.connect() as conn:
+        analysis = build_product_analysis(conn, item_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail=f"Product {item_id} not found")
+    try:
+        return explain_item(engine, analysis)
+    except ExplanationUnavailable as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

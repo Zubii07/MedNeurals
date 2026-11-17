@@ -1,6 +1,8 @@
 # Phase 10: read-only dashboard endpoints against the real PostgreSQL DB. Tests insert their own run pairs (newest, so
 # they become the latest run) with the Phase 9 helper and delete only what they created.
 
+import datetime
+
 import pytest
 from sqlalchemy import text
 
@@ -231,3 +233,24 @@ def test_get_endpoints_never_predict_generate_or_write(client, monkeypatch):
     for url in ("/dashboard/summary", "/forecasts", "/stockout-risks", "/recommendations", f"/products/{ITEMS[0]}/analysis"):
         assert client.get(url).status_code == 200, url
     assert q(state) == before
+
+
+def test_weekly_demand_returns_complete_monday_weeks(client):
+    item = ITEMS[0]
+    body = client.get("/demand/weekly", params={"item_id": item, "weeks": 8, "end_date": "2025-11-30"}).json()
+    assert body["item_id"] == item and body["store_id"] is None and body["end_date"] == "2025-11-30"   # a Sunday
+    weeks = body["weeks"]
+    assert len(weeks) == 8
+    starts = [w["week_start"] for w in weeks]
+    assert starts[0] == "2025-10-06" and starts[-1] == "2025-11-24"          # oldest first, 8 Mondays
+    assert all(datetime.date.fromisoformat(s).weekday() == 0 for s in starts)
+    # totals equal the sub-store daily_inventory demand of the same days (the forecast's input; no central store)
+    expected = q("SELECT coalesce(sum(demand_qty), 0) FROM daily_inventory WHERE item_id = :i AND store_id <> 'STR-001' "
+                 "AND date BETWEEN '2025-10-06' AND '2025-11-30'", i=item)[0][0]
+    assert sum(w["demand_qty"] for w in weeks) == pytest.approx(float(expected))
+
+    # a mid-week end date drops the incomplete week; one store filters to that store
+    body = client.get("/demand/weekly", params={"item_id": item, "store_id": SUB_STORES[0], "weeks": 4, "end_date": "2025-12-03"}).json()
+    assert body["end_date"] == "2025-11-30" and body["store_id"] == SUB_STORES[0] and len(body["weeks"]) == 4
+    assert client.get("/demand/weekly", params={"item_id": "MED-NOPE"}).status_code == 404
+    assert client.get("/demand/weekly", params={"item_id": item, "store_id": "STR-NOPE"}).status_code == 404

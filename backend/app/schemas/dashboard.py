@@ -71,6 +71,17 @@ class StockoutRiskRow(BaseModel):
     threshold_review: float
     threshold_urgent: float
     model_run_id: int               # stockout run
+    # Why: the snapshot values the model scored (prediction_date, end of day). None on runs saved before Phase 10b.
+    stock_on_hand: float | None = None
+    in_transit_qty: float | None = None
+    adu_28: float | None = None                 # average daily demand, last 28 days
+    days_of_cover: float | None = None          # stock_on_hand / adu_28 (None when there was no demand)
+    incoming_within_n: float | None = None      # open purchase-order quantity due within horizon_days
+    fc_next_n_p50: float | None = None          # forecast demand (P50) over horizon_days
+    stockout_days_last_28: float | None = None
+    central_stock_qty: float | None = None
+    days_since_stockout: float | None = None    # None when the store never ran out of the item
+    supplier_lt_mean: float | None = None       # preferred supplier's mean lead time, days
 
 
 class ForecastPage(Page[ForecastRow]):
@@ -146,6 +157,17 @@ class ItemRecommendation(BaseModel):
     # inputs; the reason is not stored). "set_missing": the latest run has no set.
     item_status: Literal["available", "item_not_included", "set_missing"]
     rows: list[RecommendationRow]    # item-level row (PURCHASE / EXPEDITE_PO / NONE) and TRANSFER rows
+
+
+class ProductExplanation(BaseModel):
+    """POST /products/{item_id}/explanation: one paragraph that restates the item's stored results (rule 8)."""
+    item_id: str
+    model_run_id: int                       # stockout run the paragraph describes
+    text: str
+    source: Literal["llm", "template"]      # llm: Gemini answer that passed the number check; template: fixed wording
+    provider_model: str | None
+    note: str | None                        # why the template was used (missing key, failed call, rejected answer)
+    created_at: datetime.datetime
 
 
 class ProductAnalysis(BaseModel):

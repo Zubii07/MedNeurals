@@ -19,14 +19,10 @@ import { useStockoutRisks } from '@/api/hooks'
 import { isNoPredictionRunError } from '@/api/client'
 import { ALL, useUrlFilters } from '@/hooks/use-url-filters'
 import { RISK_LEVELS, RISK_LEVEL_META, SUB_STORES, storeName } from '@/lib/enums'
-import { formatDate, formatNumber, formatPercent, runLabel } from '@/lib/format'
+import { formatDate, formatNumber } from '@/lib/format'
 
 const FILTER_KEYS = ['risk_level', 'store_id', 'item_id']
 const HEAD = 'h-9 bg-muted/60 px-2 text-xs font-medium text-muted-foreground first:rounded-l-lg last:rounded-r-lg'
-
-function modelLabel(info) {
-  return info ? `${info.model_name} v${info.model_version} (${runLabel(info.model_run_id)})` : '—'
-}
 
 /**
  * Stockout Risk Centre (`/stockout-risks`, plan §7.2): every store × item stockout prediction of the latest run,
@@ -125,16 +121,11 @@ export default function StockoutRisksPage() {
         <RunFacts
           className="mt-3"
           loading={query.isPending}
+          title="Predictions"
           items={[
-            { label: 'Prediction date', value: formatDate(run?.prediction_date) },
-            { label: 'Data cutoff', value: formatDate(run?.data_cutoff_date) },
-            { label: 'Stockout model', value: modelLabel(run?.stockout) },
-            ...(sample
-              ? [
-                  { label: 'Horizon', value: `${formatNumber(sample.horizon_days)} days` },
-                  { label: 'Thresholds', value: `review ≥ ${formatPercent(sample.threshold_review)} · urgent ≥ ${formatPercent(sample.threshold_urgent)}` },
-                ]
-              : []),
+            { label: 'Made on', value: formatDate(run?.prediction_date) },
+            { label: 'Data up to', value: formatDate(run?.data_cutoff_date) },
+            ...(sample ? [{ label: 'Looking ahead', value: `${formatNumber(sample.horizon_days)} days` }] : []),
           ]}
         />
       </PageHeader>

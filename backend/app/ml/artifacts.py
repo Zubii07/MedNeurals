@@ -128,6 +128,13 @@ def feature_version() -> str:
 
 
 @lru_cache(maxsize=1)
+def get_metrics(trained_dir: Path = TRAINED_DIR) -> dict | None:
+    """metrics.json of the trained artifacts (evaluation scores written by the notebook), or None if absent."""
+    path = trained_dir / METRICS_FILE
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+@lru_cache(maxsize=1)
 def get_artifacts() -> ModelArtifacts:
     """Loaded once (at startup, see app.main) and reused by every prediction run."""
     return load_artifacts()

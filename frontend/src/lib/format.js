@@ -189,3 +189,15 @@ export function formatBytes(bytes) {
   if (value < 1024 * 1024) return `${formatDecimal(value / 1024, 1)} KB`
   return `${formatDecimal(value / (1024 * 1024), 1)} MB`
 }
+
+/**
+ * Stockout probability for the officer: whole percent ("12%"), "<1%" below 1%. Whole percents are what the
+ * calibration check on the 2025 hold-out supports (backend/docs/MODEL_EVALUATION.md §3).
+ * @param {number | null | undefined} rate 0-1
+ */
+export function formatProbability(rate) {
+  if (isNil(rate) || Number.isNaN(Number(rate))) return EM_DASH
+  const value = Number(rate)
+  if (value < 0.01) return '<1%'
+  return `${Math.round(value * 100)}%`
+}

@@ -8,7 +8,7 @@ import pytest
 from app.ml.artifacts import TRAINED_DIR, get_artifacts
 from app.ml.features import DEMAND_FEATURES, STOCKOUT_FEATURES
 from app.services.feature_inputs import prediction_date_for
-from app.services.predictions import PredictionError, cap_demand_outliers, risk_level, run_predictions
+from app.services.predictions import STOCKOUT_DRIVERS, PredictionError, cap_demand_outliers, risk_level, run_predictions
 
 PREDICTION_DATE = datetime.date(2025, 6, 2)   # a Monday
 ITEM = "MED-000001"
@@ -72,6 +72,26 @@ def test_run_predictions_returns_forecasts_and_stockout(artifacts):
     assert so[["store_id", "item_id"]].values.tolist() == [["STR-002", ITEM]]   # sub-stores only
     assert so["probability"].between(0, 1).all()
     assert so["risk_level"].iloc[0] in {"LOW", "REVIEW", "URGENT"}
+    # the drivers travel with the probability so the UI can explain it
+    assert set(STOCKOUT_DRIVERS) <= set(so.columns)
+    row = so.iloc[0]
+    assert row["stock_on_hand"] >= 0 and row["adu_28"] > 0
+    assert row["days_of_cover"] == pytest.approx(row["stock_on_hand"] / row["adu_28"])
+    assert row["fc_next_n_p50"] >= 0 and row["stockout_days_last_28"] >= 0
+
+
+def test_model_details_endpoint_describes_the_saved_thresholds(artifacts):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.get("/predictions/models")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["stockout"]["thresholds"] == {"review": artifacts.threshold_review, "urgent": artifacts.threshold_urgent}
+    assert body["stockout"]["horizon_days"] == artifacts.stockout_horizon_days
+    assert 0 < body["stockout"]["urgent"]["precision"] <= 1 and 0 < body["stockout"]["review"]["recall"] <= 1
+    assert set(body["demand"]["wape_by_horizon"]) == {"1", "2", "3", "4"}
 
 
 def test_rows_after_prediction_date_do_not_change_results(artifacts):

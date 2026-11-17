@@ -57,6 +57,46 @@ class StockoutPrediction(BaseModel):
     risk_level: str                 # URGENT / REVIEW / LOW from the saved thresholds
 
 
+class ThresholdPerformance(BaseModel):
+    """How the saved threshold behaved on the held-out test period (metrics.json)."""
+    threshold: float
+    precision: float                # share of flagged store x item rows that really ran out
+    recall: float                   # share of real stockouts that were flagged
+    flag_rate: float                # share of all store x item rows flagged
+
+
+class StockoutModelDetails(BaseModel):
+    model_name: str
+    model_version: str
+    horizon_days: int
+    thresholds: StockoutThresholds
+    calibration: str | None         # e.g. "Platt scaling fitted on validation-A"
+    test_period: str
+    review: ThresholdPerformance
+    urgent: ThresholdPerformance
+    pr_auc: float | None
+    roc_auc: float | None
+    brier: float | None
+
+
+class DemandModelDetails(BaseModel):
+    model_name: str
+    model_version: str
+    horizons: list[int]
+    test_period: str
+    wape_by_horizon: dict[str, float]               # "1".."4" -> weighted absolute percentage error
+    p90_coverage_by_horizon: dict[str, float]       # share of actual weeks at or below P90 (target 0.90)
+    seasonal_naive_wape_by_horizon: dict[str, float]
+
+
+class ModelDetails(BaseModel):
+    """Static description of the trained artifacts for the explanation texts and the project-team page."""
+    trained_on: str | None
+    feature_version: str
+    demand: DemandModelDetails
+    stockout: StockoutModelDetails
+
+
 class PredictionPreview(BaseModel):
     data_cutoff_date: datetime.date
     prediction_date: datetime.date
