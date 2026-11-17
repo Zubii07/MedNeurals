@@ -171,3 +171,21 @@ export function formatPaymentTerms(terms) {
   const match = /^net\s*(\d+)$/i.exec(String(terms).trim())
   return match ? `Pay within ${match[1]} days` : String(terms)
 }
+
+/** Elapsed whole seconds as "42 s" or "1 min 12 s" (long-running refresh / import indicators). */
+export function formatElapsed(seconds) {
+  if (isNil(seconds) || Number.isNaN(Number(seconds))) return EM_DASH
+  const total = Math.max(0, Math.floor(Number(seconds)))
+  const minutes = Math.floor(total / 60)
+  const rest = total % 60
+  return minutes ? `${minutes} min ${rest} s` : `${rest} s`
+}
+
+/** File size as "824 B", "12.4 KB" or "3.2 MB". */
+export function formatBytes(bytes) {
+  if (isNil(bytes) || Number.isNaN(Number(bytes))) return EM_DASH
+  const value = Number(bytes)
+  if (value < 1024) return `${formatNumber(value)} B`
+  if (value < 1024 * 1024) return `${formatDecimal(value / 1024, 1)} KB`
+  return `${formatDecimal(value / (1024 * 1024), 1)} MB`
+}

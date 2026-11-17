@@ -109,24 +109,32 @@ export const VED_CLASS_META = {
 export const RECOMMENDATION_SET_STATUSES = ['current', 'missing']
 export const FRESHNESS = ['current', 'stale']
 
-/** Datasets accepted by POST /data/import (section 6.3), in the required import order (masters first). */
-export const IMPORT_DATASETS = [
-  { value: 'hospitals', label: 'Hospitals' },
-  { value: 'categories', label: 'Categories' },
-  { value: 'units_of_measure', label: 'Units of measure' },
-  { value: 'stores', label: 'Stores' },
-  { value: 'departments', label: 'Departments' },
-  { value: 'medical_items', label: 'Medical items' },
-  { value: 'suppliers', label: 'Suppliers' },
-  { value: 'supplier_items', label: 'Supplier items' },
-  { value: 'item_department_usage', label: 'Item department usage' },
-  { value: 'calendar', label: 'Calendar' },
-  { value: 'demand', label: 'Demand' },
-  { value: 'daily_inventory', label: 'Daily inventory' },
-  { value: 'purchase_orders', label: 'Purchase orders' },
-  { value: 'stock_transfers', label: 'Stock transfers' },
-  { value: 'stockout_events', label: 'Stockout events' },
+/**
+ * Files an officer uploads through POST /data/import (section 6.3). Predictions and recommendations are built from
+ * these six only: demand comes from daily inventory, and the other datasets the endpoint accepts (hospitals,
+ * categories, units of measure, stores, departments, item department usage, calendar, demand, stockout events) are
+ * one-time setup or unused, loaded with `python -m scripts.import_csv`.
+ */
+export const IMPORT_DATASET_GROUPS = [
+  {
+    label: 'New data',
+    datasets: [
+      { value: 'daily_inventory', label: 'Daily inventory' },
+      { value: 'purchase_orders', label: 'Purchase orders' },
+      { value: 'stock_transfers', label: 'Stock transfers' },
+    ],
+  },
+  {
+    label: 'Only when changed',
+    datasets: [
+      { value: 'medical_items', label: 'Medical items' },
+      { value: 'suppliers', label: 'Suppliers' },
+      { value: 'supplier_items', label: 'Supplier items' },
+    ],
+  },
 ]
+
+export const IMPORT_DATASETS = IMPORT_DATASET_GROUPS.flatMap((group) => group.datasets)
 
 /** Table page sizes (plan §7.2). */
 export const PAGE_SIZES = [25, 50, 100]

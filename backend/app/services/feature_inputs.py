@@ -10,6 +10,8 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.ml.features import CENTRAL_STORE
+
 
 def prediction_date_for(data_cutoff_date: datetime.date) -> datetime.date:
     """The as-of date of a prediction run (CLAUDE.md rule 5): the data cutoff itself when it is a Sunday (the end of a
@@ -24,13 +26,15 @@ def _read(conn: Connection, sql: str, **params) -> pd.DataFrame:
 
 
 def demand_history(conn: Connection, as_of: datetime.date) -> pd.DataFrame:
-    """Input of build_weekly_demand."""
+    """Input of build_weekly_demand, read from daily_inventory: a sub-store's demand_qty is the day's total of the
+    demand table for that store and item, so routine predictions need no demand upload. The central store is left out
+    (its demand_qty is replenishment to sub-stores, not consumption), and so are zero-demand days, which
+    build_weekly_demand fills with 0 exactly as it does for days without a demand row."""
     return _read(conn, """
-        SELECT demand_date AS "Demand_Date", store_id AS "Store_ID", item_id AS "Item_ID",
-               demand_quantity AS "Demand_Quantity"
-        FROM demand
-        WHERE demand_date <= :as_of
-    """, as_of=as_of)
+        SELECT date AS "Demand_Date", store_id AS "Store_ID", item_id AS "Item_ID", demand_qty AS "Demand_Quantity"
+        FROM daily_inventory
+        WHERE date <= :as_of AND store_id <> :central AND demand_qty > 0
+    """, as_of=as_of, central=CENTRAL_STORE)
 
 
 def inventory_history(conn: Connection, as_of: datetime.date) -> pd.DataFrame:

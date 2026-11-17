@@ -4,8 +4,8 @@
  * Every hook takes the endpoint's query params as its first argument (they become part of the
  * query key) and an optional TanStack `options` object (enabled, refetchInterval, …) as the second.
  */
-import { useQuery } from '@tanstack/react-query'
-import { apiGet } from './client'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiGet, apiPost, apiUpload } from './client'
 
 const HEALTH_POLL_MS = 30_000
 
@@ -213,5 +213,78 @@ export function useSupplierPerformance(supplierId, params = {}, options) {
     queryFn: ({ signal }) => apiGet(`/suppliers/${encodeURIComponent(supplierId)}/performance`, params, { signal }),
     enabled: Boolean(supplierId),
     ...options,
+  })
+}
+
+/* ------------------------------------------------- data & predictions (§7.11) */
+
+/** POST /predictions/refresh takes ~70 s; the plan (§5.4) forbids a timeout below 180 s. */
+const PREDICTION_REFRESH_TIMEOUT_MS = 180_000
+const RECOMMENDATION_REFRESH_TIMEOUT_MS = 120_000
+/** CSV imports: the demand file has millions of rows and is parsed and written server-side. */
+const IMPORT_TIMEOUT_MS = 600_000
+
+/**
+ * GET /predictions/status → PredictionStatus (`recommendations` is null, §6.7).
+ * 404 "no successful prediction run yet" before the first refresh (isNoPredictionRunError).
+ */
+export function usePredictionStatus(options) {
+  return useQuery({
+    queryKey: ['predictions', 'status'],
+    queryFn: ({ signal }) => apiGet('/predictions/status', undefined, { signal }),
+    ...options,
+  })
+}
+
+/**
+ * POST /predictions/refresh → PredictionStatus with the `recommendations` step (§6.7). Runs both models on the
+ * latest inventory date and saves new runs (~70 s). Every query is invalidated afterwards (§5.4) so all views reload.
+ */
+export function useRefreshPredictions() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['predictions', 'refresh'],
+    mutationFn: () => apiPost('/predictions/refresh', undefined, { timeoutMs: PREDICTION_REFRESH_TIMEOUT_MS }),
+    onSuccess: () => {
+      queryClient.invalidateQueries()
+    },
+  })
+}
+
+/**
+ * POST /recommendations/refresh?model_run_id= → RecommendationSummary (§6.9). Idempotent: an existing set comes
+ * back with `created: false`. 404 unknown / no completed run; 409 when the run cannot be used.
+ * @returns mutation taking `{ model_run_id?: number }`
+ */
+export function useRefreshRecommendations() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['recommendations', 'refresh'],
+    mutationFn: ({ model_run_id } = {}) =>
+      apiPost('/recommendations/refresh', undefined, { params: { model_run_id }, timeoutMs: RECOMMENDATION_REFRESH_TIMEOUT_MS }),
+    onSuccess: () => {
+      queryClient.invalidateQueries()
+    },
+  })
+}
+
+/**
+ * POST /data/import (multipart) → ImportResult (§6.3). `cutoff` is omitted when empty (an empty string is a 422).
+ * @returns mutation taking `{ dataset: string, file: File, cutoff?: string }`
+ */
+export function useImportData() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['data', 'import'],
+    mutationFn: ({ dataset, file, cutoff }) => {
+      const formData = new FormData()
+      formData.append('dataset', dataset)
+      formData.append('file', file, file.name)
+      if (cutoff) formData.append('cutoff', cutoff)
+      return apiUpload('/data/import', formData, { timeoutMs: IMPORT_TIMEOUT_MS })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries()
+    },
   })
 }

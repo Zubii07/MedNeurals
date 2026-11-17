@@ -58,7 +58,8 @@ def _dates_as_ns(inputs: dict) -> dict:
 
 def cap_demand_outliers(demand: pd.DataFrame) -> pd.DataFrame:
     """Training preprocessing from the notebook's clean_demand (not part of features.py): cap each item's
-    Demand_Quantity at that item's 99.9th percentile. The notebook took the percentile over the whole dataset; here it
+    Demand_Quantity at that item's 99.9th percentile. Applies to single demand requests, so run_predictions no longer
+    calls it; scripts/compare_predictions.py uses it to replay the notebook from demand.csv. The notebook took the percentile over the whole dataset; here it
     is taken only over the rows passed in, which are all dated on or before the prediction date (no future data)."""
     cap = demand.groupby("Item_ID")["Demand_Quantity"].transform(lambda x: x.quantile(DEMAND_CAP_QUANTILE))
     return demand.assign(Demand_Quantity=np.minimum(demand["Demand_Quantity"], cap))
@@ -71,9 +72,12 @@ def run_predictions(inputs: dict, data_cutoff_date: datetime.date, artifacts: Mo
     if as_of.dayofweek not in (0, 6):
         raise PredictionError(f"prediction date {as_of.date()} is not a Monday or a Sunday")
 
-    # 1-3. capped weekly demand -> P50/P90 forecast from the last complete week ending on or before the prediction
-    # date (the week ending that Sunday, or the week before a Monday). H1 is always the week after it.
-    weekly = build_weekly_demand(cap_demand_outliers(inputs["demand"]))
+    # 1-3. weekly demand -> P50/P90 forecast from the last complete week ending on or before the prediction date (the
+    # week ending that Sunday, or the week before a Monday). H1 is always the week after it. The demand input is daily
+    # totals per store and item (feature_inputs.demand_history), so the per-request cap of training is not applied:
+    # single requests are not visible in a daily total, and capping the totals instead tracked the trained pipeline
+    # less closely than no cap on six 2025 dates.
+    weekly = build_weekly_demand(inputs["demand"])
     last_sunday = as_of - pd.Timedelta(days=(as_of.dayofweek + 1) % 7)
     forecast_week = last_sunday - pd.Timedelta(days=6)
     if weekly.empty or weekly["week_start"].max() != forecast_week:

@@ -66,7 +66,7 @@ Code: `app/services/feature_inputs.py`. `load_feature_inputs(conn, data_cutoff_d
 
 | Query | Feeds | Columns returned |
 |---|---|---|
-| `demand_history` | `build_weekly_demand` | `Demand_Date`, `Store_ID`, `Item_ID`, `Demand_Quantity` |
+| `demand_history` | `build_weekly_demand` | `Demand_Date`, `Store_ID`, `Item_ID`, `Demand_Quantity` — read from `daily_inventory` (`date`, `demand_qty`; sub-stores, days with demand), not from `demand`: the `demand` table is optional history |
 | `inventory_history` | `build_stockout_snapshots(inventory)` | `date`, `store_id`, `item_id`, `demand_qty`, `closing_qty`, `on_order_qty`, `is_stockout` (0/1) |
 | `transfer_history` | `build_stockout_snapshots(transfers)` | `transfer_date`, `to_store_id`, `item_id`, `shipped_qty` |
 | `purchase_order_history` | `build_stockout_snapshots(purchase_orders)` | `purchase_order_id`, `supplier_id`, `item_id`, `order_date`, `expected_delivery_date`, `receipt_date`, `lead_time_days`, `ordered_quantity`, `is_emergency` (0/1) |
