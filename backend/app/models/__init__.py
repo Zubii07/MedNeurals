@@ -15,6 +15,7 @@ from app.models.predictions import ForecastPrediction, ModelRun, StockoutPredict
 from app.models.recommendations import Recommendation
 from app.models.transactions import DailyInventory, Demand, PurchaseOrder, StockoutEvent, StockTransfer
 from app.models.upload import Upload
+from app.models.user import User
 
 __all__ = [
     "CalendarDay",
@@ -38,4 +39,5 @@ __all__ = [
     "SupplierItem",
     "UnitOfMeasure",
     "Upload",
+    "User",
 ]

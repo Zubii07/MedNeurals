@@ -4,18 +4,17 @@ import PredictionRefreshCard from '@/components/data/PredictionRefreshCard'
 import StatusStrip from '@/components/data/StatusStrip'
 
 /**
- * Data & Predictions (`/data`, plan §7.11): status tiles for data, predictions, recommendations and models;
- * the long-running prediction refresh (with recommendation retry); and the CSV import form.
- * The only page that writes to the backend.
+ * Data & Predictions (`/data`, plan §7.11, administrators only): one status card, then the two steps in the order
+ * they are done – upload the new files, then update the predictions. The only page that writes to the backend.
  */
 export default function DataPredictionsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Data & Predictions" description="Import CSV data and run the ML models. Predictions only change after a refresh." />
+      <PageHeader title="Data & Predictions" description="Upload the latest files, then update the predictions. Predictions only change when you update them." />
       <StatusStrip />
       <div className="grid items-stretch gap-6 xl:grid-cols-2">
-        <PredictionRefreshCard />
         <ImportDataCard />
+        <PredictionRefreshCard />
       </div>
     </div>
   )

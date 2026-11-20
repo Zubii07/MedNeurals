@@ -142,11 +142,22 @@ export function truncate(text, maxLength = 80) {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1).trimEnd()}…` : value
 }
 
-/** Greeting by local time (plan section 3.3) - no user name until login exists. */
-export function greetingForHour(hour = new Date().getHours()) {
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
+/**
+ * Greeting by local time (plan section 3.3), with the signed-in user's first name when known:
+ * "Good morning, Ayesha". Morning is 5:00–11:59, afternoon 12:00–16:59, evening 17:00–20:59; from 21:00 to 4:59
+ * the greeting is a neutral "Welcome back" rather than calling 1 am "morning".
+ * @param {number} [hour]
+ * @param {string | null} [name] first name to append
+ */
+export function greetingForHour(hour = new Date().getHours(), name = null) {
+  const base = hour < 5 ? 'Welcome back' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Welcome back'
+  return name ? `${base}, ${name}` : base
+}
+
+/** First word of a full name ("Ayesha Khan" -> "Ayesha"); '' for empty input. */
+export function firstName(fullName) {
+  if (isNil(fullName)) return ''
+  return String(fullName).trim().split(/\s+/)[0] ?? ''
 }
 
 /**

@@ -33,7 +33,7 @@ export default function ImportDataCard() {
   const refreshing = useIsMutating({ mutationKey: ['predictions', 'refresh'] }) > 0
   const elapsed = useElapsedSeconds(upload.isPending)
 
-  const fileError = file && !/\.csv$/i.test(file.name) ? 'Choose a .csv file.' : null
+  const fileError = file && !/\.csv$/i.test(file.name) ? 'Choose a .csv file exported from the hospital system.' : null
   const canSubmit = Boolean(dataset && file && !fileError) && !upload.isPending && !refreshing
 
   const pick = (list) => setFile(list?.[0] ?? null)
@@ -53,12 +53,12 @@ export default function ImportDataCard() {
       {
         onSuccess: (result) => {
           const partial = result.status === 'partial'
-          toast[partial ? 'warning' : 'success'](partial ? 'Import completed with rejected rows' : 'Import completed', {
-            description: `${result.filename}: ${formatNumber(result.rows_written)} rows written`,
+          toast[partial ? 'warning' : 'success'](partial ? 'Upload finished, some rows were rejected' : 'Upload finished', {
+            description: `${result.filename}: ${formatNumber(result.rows_written)} rows added`,
           })
           clearFile()
         },
-        onError: (error) => toast.error('Import failed', { description: errorMessage(error) }),
+        onError: (error) => toast.error('Upload failed', { description: errorMessage(error) }),
       },
     )
   }
@@ -68,8 +68,8 @@ export default function ImportDataCard() {
       <SectionCard
         icon={Upload}
         tone="info"
-        title="Import data"
-        description="Upload new inventory, purchase order and transfer files, then run a prediction refresh."
+        title="Step 1 · Upload new data"
+        description="Add the latest inventory, purchase order and transfer files, one file at a time."
         className={cn(!upload.isSuccess && 'h-full')}
         contentClassName="flex flex-1 flex-col"
       >
@@ -77,11 +77,11 @@ export default function ImportDataCard() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="import-dataset" className={LABEL}>
-                Dataset
+                What the file contains
               </Label>
               <Select value={dataset} onValueChange={setDataset} disabled={upload.isPending}>
                 <SelectTrigger id="import-dataset" className="h-9 w-full bg-card">
-                  <SelectValue placeholder="Choose a dataset" />
+                  <SelectValue placeholder="Choose a file type" />
                 </SelectTrigger>
                 <SelectContent position="popper">
                   {IMPORT_DATASET_GROUPS.map((group) => (
@@ -99,15 +99,15 @@ export default function ImportDataCard() {
             </div>
             <div>
               <Label htmlFor="import-cutoff" className={LABEL}>
-                Cutoff date (optional)
+                Only rows up to (optional)
               </Label>
-              <DatePicker id="import-cutoff" value={cutoff} onChange={setCutoff} placeholder="No cutoff – import every row" />
+              <DatePicker id="import-cutoff" value={cutoff} onChange={setCutoff} placeholder="All rows in the file" />
             </div>
           </div>
 
           <div>
             <Label htmlFor="import-file" className={LABEL}>
-              CSV file
+              File
             </Label>
             <input
               key={fileKey}
@@ -148,7 +148,7 @@ export default function ImportDataCard() {
               <div
                 role="button"
                 tabIndex={upload.isPending ? -1 : 0}
-                aria-label="Choose a CSV file"
+                aria-label="Choose a file"
                 onClick={openPicker}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -176,9 +176,9 @@ export default function ImportDataCard() {
                   <FileUp className="size-5" aria-hidden="true" />
                 </span>
                 <p className="text-sm font-medium text-foreground">
-                  Drop a CSV file here or <span className="text-primary underline underline-offset-2">browse</span>
+                  Drop a file here or <span className="text-primary underline underline-offset-2">browse</span>
                 </p>
-                <p className="text-xs text-muted-foreground">One file per import · rows dated after the cutoff are skipped</p>
+                <p className="text-xs text-muted-foreground">A .csv export from the hospital system · rows already in the system are not duplicated</p>
               </div>
             )}
           </div>
@@ -186,21 +186,21 @@ export default function ImportDataCard() {
           <div className="mt-auto flex flex-col gap-3 sm:flex-row sm:items-center">
             <Button type="submit" className="w-full sm:w-auto" disabled={!canSubmit}>
               {upload.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Upload aria-hidden="true" />}
-              {upload.isPending ? `Importing… ${formatElapsed(elapsed)}` : 'Import CSV'}
+              {upload.isPending ? `Uploading… ${formatElapsed(elapsed)}` : 'Upload file'}
             </Button>
             {upload.isPending ? (
               <p aria-live="polite" className="text-xs text-muted-foreground">
                 Large files can take a few minutes. Please keep this page open.
               </p>
             ) : refreshing ? (
-              <p className="text-xs text-muted-foreground">Wait for the prediction refresh to finish before importing.</p>
+              <p className="text-xs text-muted-foreground">Wait for the prediction update to finish first.</p>
             ) : null}
           </div>
 
           {upload.isError ? (
             <Alert variant="destructive" className="border-danger/30">
               <CircleAlert aria-hidden="true" />
-              <AlertTitle>Import failed</AlertTitle>
+              <AlertTitle>Upload failed</AlertTitle>
               <AlertDescription className="break-words">{errorMessage(upload.error)}</AlertDescription>
             </Alert>
           ) : null}

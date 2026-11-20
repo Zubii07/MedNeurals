@@ -1,7 +1,9 @@
 import datetime
 from typing import Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+
+from app.api.deps import require_admin
 
 from app.database.connection import engine
 from app.schemas.data_import import ImportResult
@@ -16,7 +18,7 @@ Dataset = Literal[
 ]
 
 
-@router.post("/import", response_model=ImportResult)
+@router.post("/import", response_model=ImportResult, dependencies=[Depends(require_admin)])
 def import_csv(
     dataset: Dataset = Form(...),
     file: UploadFile = File(...),

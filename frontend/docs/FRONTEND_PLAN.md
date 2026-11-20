@@ -784,6 +784,16 @@ export interface ImportResult {
 
 ---
 
+## 6.14 Sign-in and roles (stage 6, 2026-11-21)
+
+Every endpoint except `/health*` and `POST /auth/login` needs `Authorization: Bearer <token>`; `src/api/client.js`
+adds it from `localStorage` (`medneurals.token`) and a 401 anywhere but the login clears the token and signs out
+(`setUnauthorizedHandler`). `src/auth/AuthProvider.jsx` (`useAuth()`: user, status, signIn, signOut) validates a
+stored token with `GET /auth/me` on load; `RequireAuth` wraps the app layout, `RequireAdmin` wraps `/data` and
+`/admin/users`. Roles: `ADMIN` (accounts, imports, refreshes) and `PROCUREMENT_OFFICER` (view only); the sidebar
+hides admin items, the header shows the user menu, and the backend's 403 is the real guard. Pages: `LoginPage`,
+`UsersPage`. First administrator: `python -m scripts.create_admin` in `backend/`.
+
 # 7. Page specifications
 
 ## 7.1 Dashboard (`/`)

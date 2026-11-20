@@ -3,6 +3,8 @@
  *
  * All calls go through the `/api` prefix, which the Vite dev server proxies to
  * http://127.0.0.1:8000 (the backend has no CORS middleware and no `/api` prefix).
+ *
+ * Every request carries `Authorization: Bearer <token>` when a token is stored (see getToken / setToken).
  */
 
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
@@ -12,6 +14,44 @@ export const TIMEOUT_ERROR_MESSAGE = 'The request timed out.'
 
 /** Default per-request timeout. Long operations (e.g. POST /predictions/refresh, ~70 s) pass their own `timeoutMs`. */
 const DEFAULT_TIMEOUT_MS = 30_000
+
+/* ------------------------------------------------------------------- auth */
+
+/** localStorage key holding the bearer token from POST /auth/login (stage 6: sign-in and roles). */
+export const TOKEN_STORAGE_KEY = 'medneurals.token'
+
+/** The one path whose 401 means "wrong email or password", not "your session has ended". */
+const LOGIN_PATH = '/auth/login'
+
+/** Stored bearer token, or null when signed out (or when localStorage is unavailable). */
+export function getToken() {
+  try {
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** Store the bearer token; `null` removes it. */
+export function setToken(token) {
+  try {
+    if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token)
+    else window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+  } catch {
+    // Private mode / blocked storage: the session simply does not survive a reload.
+  }
+}
+
+let unauthorizedHandler = null
+
+/**
+ * Register the function called when any request other than the login itself answers 401 (token missing, invalid
+ * or expired). The AuthProvider uses it to switch to signed-out. A 403 (not allowed for this role) never signs out.
+ * @param {(() => void) | null} handler
+ */
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler
+}
 
 /**
  * Error thrown for every failed request.
@@ -77,9 +117,12 @@ async function request(path, { method = 'GET', params, body, headers, signal, ti
     else signal.addEventListener('abort', onOuterAbort, { once: true })
   }
 
+  const token = getToken()
+  const finalHeaders = token ? { Authorization: `Bearer ${token}`, ...headers } : headers
+
   let response
   try {
-    response = await fetch(url, { method, body, headers, signal: controller.signal })
+    response = await fetch(url, { method, body, headers: finalHeaders, signal: controller.signal })
   } catch (error) {
     clearTimeout(timer)
     if (signal?.aborted) throw error // cancelled by the caller (e.g. TanStack Query)
@@ -102,6 +145,11 @@ async function request(path, { method = 'GET', params, body, headers, signal, ti
   if (!response.ok) {
     const detail = data && typeof data === 'object' && !Array.isArray(data) ? data.detail : data
     const fallback = `Request failed (${response.status} ${response.statusText || ''})`.trim()
+    if (response.status === 401 && path !== LOGIN_PATH) {
+      // Session ended: drop the token and let the AuthProvider send the user to the login page.
+      setToken(null)
+      unauthorizedHandler?.()
+    }
     throw new ApiError(response.status, detailToMessage(detail, fallback), detail ?? null)
   }
   return data
@@ -130,6 +178,21 @@ export function apiPost(path, body, options = {}) {
     method: 'POST',
     body: isJson ? JSON.stringify(body) : body,
     headers: isJson ? { 'Content-Type': 'application/json', ...options.headers } : options.headers,
+  })
+}
+
+/**
+ * PATCH request with a JSON body (PATCH /users/{id}).
+ * @param {string} path
+ * @param {Record<string, unknown>} body
+ * @param {{params?: Record<string, unknown>, signal?: AbortSignal, timeoutMs?: number, headers?: Record<string, string>}} [options]
+ */
+export function apiPatch(path, body, options = {}) {
+  return request(path, {
+    ...options,
+    method: 'PATCH',
+    body: JSON.stringify(body ?? {}),
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   })
 }
 

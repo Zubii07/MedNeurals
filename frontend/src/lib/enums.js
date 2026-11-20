@@ -78,6 +78,16 @@ export const RECOMMENDATION_STATUS_META = {
   REJECTED: { label: 'Rejected', tone: 'danger' },
 }
 
+/* ------------------------------------------------------------------ roles */
+
+/** User roles (stage 6). Officers are view only; administrators also import data, run predictions and manage users. */
+export const ROLES = ['ADMIN', 'PROCUREMENT_OFFICER']
+
+export const ROLE_META = {
+  ADMIN: { label: 'Administrator', tone: 'primary' },
+  PROCUREMENT_OFFICER: { label: 'Procurement officer', tone: 'neutral' },
+}
+
 /* ---------------------------------------------------------- other enums */
 
 /** Model run status. */

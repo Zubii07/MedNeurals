@@ -5,7 +5,7 @@
  * query key) and an optional TanStack `options` object (enabled, refetchInterval, …) as the second.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiUpload } from './client'
+import { apiGet, apiPatch, apiPost, apiUpload } from './client'
 
 const HEALTH_POLL_MS = 30_000
 
@@ -338,5 +338,60 @@ export function useProductExplanation(itemId, options) {
     staleTime: 10 * 60_000,
     retry: false,
     ...options,
+  })
+}
+
+/* ------------------------------------------------------------- auth / users */
+
+/**
+ * POST /auth/login → LoginResult (stage 6). 401 "Email or password is incorrect" / "This account has been
+ * deactivated". The AuthProvider's `signIn` wraps this call and stores the token; use this hook only where the
+ * mutation state itself is needed.
+ * @returns mutation taking `{ email: string, password: string }`
+ */
+export function useLogin() {
+  return useMutation({
+    mutationKey: ['auth', 'login'],
+    mutationFn: ({ email, password }) => apiPost('/auth/login', { email, password }),
+  })
+}
+
+/** GET /users → {items: User[]} (admin only; 403 for an officer). */
+export function useUsers(options) {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: ({ signal }) => apiGet('/users', undefined, { signal }),
+    ...options,
+  })
+}
+
+/**
+ * POST /users → User (201). 409 duplicate email, 422 when the password is not 8–72 characters.
+ * @returns mutation taking `{ name: string, email: string, role: Role, password: string }`
+ */
+export function useCreateUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['users', 'create'],
+    mutationFn: (body) => apiPost('/users', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+  })
+}
+
+/**
+ * PATCH /users/{id} → User. Any of name, email, role, is_active, password. 409 duplicate email; 400 when an admin
+ * tries to deactivate or demote themselves or the last active administrator.
+ * @returns mutation taking `{ id: number, changes: Partial<User> & { password?: string } }`
+ */
+export function useUpdateUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['users', 'update'],
+    mutationFn: ({ id, changes }) => apiPatch(`/users/${encodeURIComponent(id)}`, changes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
   })
 }

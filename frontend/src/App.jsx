@@ -1,5 +1,8 @@
 import { createBrowserRouter } from 'react-router-dom'
 import AppLayout from '@/components/layout/AppLayout'
+import RequireAuth from '@/auth/RequireAuth'
+import RequireAdmin from '@/auth/RequireAdmin'
+import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import InventoryPage from '@/pages/InventoryPage'
 import StockoutRisksPage from '@/pages/StockoutRisksPage'
@@ -11,26 +14,40 @@ import SuppliersPage from '@/pages/SuppliersPage'
 import SupplierPerformancePage from '@/pages/SupplierPerformancePage'
 import PurchaseOrdersPage from '@/pages/PurchaseOrdersPage'
 import DataPredictionsPage from '@/pages/DataPredictionsPage'
+import UsersPage from '@/pages/UsersPage'
 import NotFoundPage from '@/pages/NotFoundPage'
 
 // Routes from plan section 4. Product Analysis and Products are reached from search, tables and buttons.
+// Stage 6: /login has no sidebar; everything else needs a signed-in user, and the admin pages the ADMIN role.
 const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
   {
-    path: '/',
-    element: <AppLayout />,
+    element: <RequireAuth />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'inventory', element: <InventoryPage /> },
-      { path: 'stockout-risks', element: <StockoutRisksPage /> },
-      { path: 'recommendations', element: <RecommendationsPage /> },
-      { path: 'forecasts', element: <ForecastsPage /> },
-      { path: 'products', element: <ProductsPage /> },
-      { path: 'products/:itemId', element: <ProductAnalysisPage /> },
-      { path: 'suppliers', element: <SuppliersPage /> },
-      { path: 'suppliers/:supplierId', element: <SupplierPerformancePage /> },
-      { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
-      { path: 'data', element: <DataPredictionsPage /> },
-      { path: '*', element: <NotFoundPage /> },
+      {
+        path: '/',
+        element: <AppLayout />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: 'inventory', element: <InventoryPage /> },
+          { path: 'stockout-risks', element: <StockoutRisksPage /> },
+          { path: 'recommendations', element: <RecommendationsPage /> },
+          { path: 'forecasts', element: <ForecastsPage /> },
+          { path: 'products', element: <ProductsPage /> },
+          { path: 'products/:itemId', element: <ProductAnalysisPage /> },
+          { path: 'suppliers', element: <SuppliersPage /> },
+          { path: 'suppliers/:supplierId', element: <SupplierPerformancePage /> },
+          { path: 'purchase-orders', element: <PurchaseOrdersPage /> },
+          {
+            element: <RequireAdmin />,
+            children: [
+              { path: 'data', element: <DataPredictionsPage /> },
+              { path: 'admin/users', element: <UsersPage /> },
+            ],
+          },
+          { path: '*', element: <NotFoundPage /> },
+        ],
+      },
     ],
   },
 ])

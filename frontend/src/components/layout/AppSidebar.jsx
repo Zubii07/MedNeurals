@@ -8,6 +8,7 @@ import {
   Sparkles,
   TrendingUp,
   Truck,
+  Users,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -25,9 +26,13 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { useHealth } from '@/api/hooks'
+import { useAuth } from '@/auth/AuthProvider'
 import { cn } from '@/lib/utils'
 
-/** Sidebar navigation (plan section 4). Product Analysis / Products are reached from search and tables. */
+/**
+ * Sidebar navigation (plan section 4). Product Analysis / Products are reached from search and tables.
+ * `adminOnly` items are hidden from procurement officers (stage 6).
+ */
 const NAV_ITEMS = [
   { label: 'Dashboard', to: '/', icon: LayoutDashboard, end: true },
   { label: 'Inventory', to: '/inventory', icon: Boxes },
@@ -44,7 +49,8 @@ const NAV_ITEMS = [
       { label: 'Purchase orders', to: '/purchase-orders' },
     ],
   },
-  { label: 'Data & Predictions', to: '/data', icon: Database },
+  { label: 'Data & Predictions', to: '/data', icon: Database, adminOnly: true },
+  { label: 'Users', to: '/admin/users', icon: Users, adminOnly: true },
 ]
 
 function isPathActive(pathname, item) {
@@ -98,6 +104,9 @@ const MENU_BUTTON_CLASSES =
 export default function AppSidebar() {
   const { pathname } = useLocation()
   const { isMobile, setOpenMobile } = useSidebar()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
+  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   const closeOnMobile = () => {
     if (isMobile) setOpenMobile(false)
@@ -113,7 +122,7 @@ export default function AppSidebar() {
         <SidebarGroup className="p-0 pt-2">
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
-              {NAV_ITEMS.map((item) => {
+              {items.map((item) => {
                 const active = isPathActive(pathname, item)
                 const Icon = item.icon
                 return (

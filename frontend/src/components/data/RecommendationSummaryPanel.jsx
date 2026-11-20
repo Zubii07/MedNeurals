@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import StatTile from '@/components/common/StatTile'
 import { ActionBadge, PriorityBadge } from '@/components/common/ToneBadge'
 import { ACTIONS, PRIORITIES } from '@/lib/enums'
-import { formatDate, formatDateTime, formatNumber, runLabel } from '@/lib/format'
+import { formatDate, formatDateTime, formatNumber } from '@/lib/format'
 
 /** Known enum values first (in their canonical order), anything unexpected after them. */
 function orderedEntries(counts, order) {
@@ -45,17 +45,17 @@ export default function RecommendationSummaryPanel({ summary }) {
   return (
     <div className="space-y-4">
       {summary.created === false ? (
-        <p className="text-xs text-muted-foreground">This run already had a recommendation set; nothing new was written.</p>
+        <p className="text-xs text-muted-foreground">These predictions already had recommendations; nothing new was written.</p>
       ) : null}
 
       <div className="grid grid-cols-3 gap-2">
-        <StatTile label="Rows" value={formatNumber(summary.row_count)} hint="recommendations" />
-        <StatTile label="Items" value={formatNumber(summary.item_count)} hint="with a recommendation" />
-        <StatTile label="Skipped items" value={formatNumber(skippedCount)} hint="incomplete inputs" tone={skippedCount > 0 ? 'danger' : undefined} />
+        <StatTile label="Recommendations" value={formatNumber(summary.row_count)} />
+        <StatTile label="Products covered" value={formatNumber(summary.item_count)} />
+        <StatTile label="Products skipped" value={formatNumber(skippedCount)} hint="missing supplier or stock data" tone={skippedCount > 0 ? 'danger' : undefined} />
       </div>
 
       <CountRow label="By action" entries={orderedEntries(summary.action_counts, ACTIONS)} renderBadge={(key) => <ActionBadge action={key} />} />
-      <CountRow label="By priority (rows)" entries={orderedEntries(summary.priority_counts, PRIORITIES)} renderBadge={(key) => <PriorityBadge priority={key} />} />
+      <CountRow label="By priority" entries={orderedEntries(summary.priority_counts, PRIORITIES)} renderBadge={(key) => <PriorityBadge priority={key} />} />
 
       {skippedCount > 0 ? (
         skipped ? (
@@ -78,13 +78,12 @@ export default function RecommendationSummaryPanel({ summary }) {
             ) : null}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">Skipped item details are only returned when a set is newly created.</p>
+          <p className="text-xs text-muted-foreground">The list of skipped products is only available right after generation.</p>
         )
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Stockout run {runLabel(summary.model_run_id)} · demand run {runLabel(summary.demand_model_run_id)} · prediction date{' '}
-        {formatDate(summary.prediction_date)} · data cutoff {formatDate(summary.data_cutoff_date)}
+        Predictions from {formatDate(summary.prediction_date)}, using data through {formatDate(summary.data_cutoff_date)}
         {summary.generated_at ? ` · generated ${formatDateTime(summary.generated_at)}` : ''}
       </p>
     </div>

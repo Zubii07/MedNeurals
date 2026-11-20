@@ -31,6 +31,14 @@ FastAPI · PostgreSQL · SQLAlchemy 2 · Alembic · pandas · scikit-learn · jo
 8. **The LLM (later phase) only explains stored results.** It never produces forecasts, probabilities, quantities or priorities.
 9. Keep it simple: no new frameworks, layers or abstractions unless the plan asks for them. Add only dependencies the phase needs.
 
+## Auth (Phase 11)
+- Two roles: `ADMIN` (accounts, imports, prediction refresh, recommendation generation) and `PROCUREMENT_OFFICER`
+  (read everything). Bearer JWT from `POST /auth/login`; `GET /auth/me`; `/health*` and login are the only public routes.
+- Every data router is included with `dependencies=[Depends(get_current_user)]` in `app/main.py`. A new admin-only
+  route adds `dependencies=[Depends(require_admin)]` on its decorator (`app/api/deps.py`). Users: `app/api/users.py`.
+- First administrator: `python -m scripts.create_admin` (prompts; prints nothing secret). Accounts are deactivated, never deleted.
+- Tests get a fake admin through `tests/conftest.py`; mark a test `real_auth` to exercise the real token check.
+
 ## Data conventions
 - DB columns are snake_case. Unique keys: `demand.demand_id`; `daily_inventory (date, store_id, item_id)`;
   `purchase_orders.purchase_order_id`; `stock_transfers (transfer_date, to_store_id, item_id)`.

@@ -6,7 +6,7 @@ import RecommendationSummaryPanel from '@/components/data/RecommendationSummaryP
 import { useRefreshRecommendations } from '@/api/hooks'
 import { errorMessage } from '@/api/client'
 import { useElapsedSeconds } from '@/hooks/use-elapsed-seconds'
-import { formatElapsed, formatNumber, runLabel } from '@/lib/format'
+import { formatElapsed, formatNumber } from '@/lib/format'
 
 /**
  * The recommendation step of a prediction run (§6.7 / §6.9):
@@ -27,7 +27,7 @@ export default function RecommendationStepPanel({ step, modelRunId }) {
       <div className="space-y-3">
         <p className="flex items-start gap-2 text-sm font-medium text-foreground">
           <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-          Recommendations {retry.data.created ? 'generated' : 'already existed'} for run {runLabel(retry.data.model_run_id)}.
+          Recommendations {retry.data.created ? 'generated' : 'were already there'}.
         </p>
         <RecommendationSummaryPanel summary={retry.data} />
       </div>
@@ -47,7 +47,7 @@ export default function RecommendationStepPanel({ step, modelRunId }) {
       {
         onSuccess: (summary) =>
           toast.success(summary.created ? 'Recommendations generated' : 'Recommendation set already existed', {
-            description: `Run ${runLabel(summary.model_run_id)} · ${formatNumber(summary.row_count)} rows for ${formatNumber(summary.item_count)} items`,
+            description: `${formatNumber(summary.row_count)} recommendations for ${formatNumber(summary.item_count)} products`,
           }),
         onError: (error) => toast.error('Recommendations failed', { description: errorMessage(error) }),
       },
@@ -64,8 +64,8 @@ export default function RecommendationStepPanel({ step, modelRunId }) {
       ) : (
         <Alert className="border-warning/40 bg-warning-bg text-[#78350f] *:data-[slot=alert-description]:text-[#92400e]">
           <TriangleAlert className="text-[#b45309]" aria-hidden="true" />
-          <AlertTitle>No recommendation set for this run.</AlertTitle>
-          <AlertDescription>Generate recommendations for run {runLabel(modelRunId)} from its saved predictions. Nothing is re-predicted.</AlertDescription>
+          <AlertTitle>The latest predictions have no recommendations yet.</AlertTitle>
+          <AlertDescription>Generate them from the saved predictions. Nothing is predicted again.</AlertDescription>
         </Alert>
       )}
 

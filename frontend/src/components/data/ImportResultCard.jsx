@@ -29,39 +29,38 @@ export default function ImportResultCard({ result }) {
     <SectionCard
       icon={FileCheck2}
       tone={status.tone === 'warning' ? 'warning' : 'success'}
-      title="Import result"
-      description={`Upload #${result.upload_id} · ${result.filename}`}
+      title="Upload result"
+      description={result.filename}
       action={<ToneBadge label={status.label} tone={status.tone} />}
     >
       <div className="space-y-4">
         <DefinitionList
           columns={3}
           items={[
-            { label: 'Dataset', value: datasetLabel },
-            { label: 'File', value: <span className="break-all">{result.filename}</span> },
-            { label: 'Cutoff date', value: result.cutoff_date ? formatDate(result.cutoff_date) : 'None' },
+            { label: 'File contains', value: datasetLabel },
+            { label: 'Rows up to', value: result.cutoff_date ? formatDate(result.cutoff_date) : 'All rows' },
+            { label: 'Rows added', value: formatNumber(result.rows_written) },
           ]}
         />
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <StatTile label="Received" value={formatNumber(result.rows_received)} hint="rows in the file" />
-          <StatTile label="Skipped" value={formatNumber(result.rows_skipped)} hint="dated after the cutoff" />
-          <StatTile label="Rejected" value={formatNumber(rejected)} hint="failed validation" tone={rejected > 0 ? 'danger' : undefined} />
-          <StatTile label="Accepted" value={formatNumber(result.rows_accepted)} hint="passed validation" />
-          <StatTile label="Written" value={formatNumber(result.rows_written)} hint="inserted or updated" />
-          <StatTile label="Unchanged" value={formatNumber(result.rows_unchanged)} hint="already in the database" />
+          <StatTile label="Rows in the file" value={formatNumber(result.rows_received)} />
+          <StatTile label="Added or updated" value={formatNumber(result.rows_written)} />
+          <StatTile label="Already present" value={formatNumber(result.rows_unchanged)} hint="left unchanged" />
+          <StatTile label="After the date limit" value={formatNumber(result.rows_skipped)} hint="not imported" />
+          <StatTile label="Rejected" value={formatNumber(rejected)} hint="could not be read" tone={rejected > 0 ? 'danger' : undefined} />
         </div>
 
         {result.rejected_summary ? <StaleBanner title="Some rows were rejected." description={result.rejected_summary} /> : null}
         {sample.length > 0 ? <RejectedSampleTable rows={sample} /> : null}
         {result.rejected_report ? (
           <p className="text-xs text-muted-foreground">
-            Full rejected-row report saved on the server at <code className="break-all font-mono text-foreground">{result.rejected_report}</code>
+            The full list of rejected rows was saved on the server at <code className="break-all font-mono text-foreground">{result.rejected_report}</code>
           </p>
         ) : null}
 
         <p className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-primary">
-          After importing, run a prediction refresh – predictions do not update automatically.
+          Now update the predictions (step 2) so they include this data.
         </p>
       </div>
     </SectionCard>

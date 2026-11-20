@@ -1,6 +1,8 @@
 import datetime
 import logging
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.api.deps import require_admin
 from app.database.connection import engine
 from app.ml.artifacts import get_artifacts, get_metrics
 from app.schemas.predictions import ModelDetails, PredictionPreview, PredictionStatus
@@ -12,7 +14,7 @@ router = APIRouter(prefix="/predictions", tags=["predictions"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/refresh", response_model=PredictionStatus)
+@router.post("/refresh", response_model=PredictionStatus, dependencies=[Depends(require_admin)])
 def refresh() -> PredictionStatus:
     """Run both models on the latest data cutoff and save the results as new model runs (earlier runs are kept), then
     generate the run's recommendations. The predictions are committed first: a failed recommendation step is reported
@@ -78,7 +80,7 @@ def model_details() -> ModelDetails:
     )
 
 
-@router.get("/preview", response_model=PredictionPreview)
+@router.get("/preview", response_model=PredictionPreview, dependencies=[Depends(require_admin)])
 def preview_predictions(
     data_cutoff: datetime.date | None = Query(None, description="Default: latest daily_inventory date in the DB"),
     item_id: str | None = Query(None, description="Only return rows for this item (all items are still predicted)"),

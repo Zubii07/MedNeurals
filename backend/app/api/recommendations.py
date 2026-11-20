@@ -1,6 +1,8 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.api.deps import require_admin
 from sqlalchemy import text
 
 from app.api.reads import pagination
@@ -51,7 +53,7 @@ def recommendation_row(r) -> dict:
     }
 
 
-@router.post("/refresh", response_model=RecommendationSummary)
+@router.post("/refresh", response_model=RecommendationSummary, dependencies=[Depends(require_admin)])
 def refresh(model_run_id: int | None = Query(None, description="Stockout run of a refresh. Default: latest completed")):
     try:
         return generate_recommendations(engine, model_run_id)

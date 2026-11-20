@@ -18,7 +18,7 @@ export default function RefreshResultCard({ result }) {
     <SectionCard
       icon={ClipboardCheck}
       tone="success"
-      title="Refresh result"
+      title="Update complete"
       description={`Completed ${formatDateTime(result.completed_at)}`}
       action={<ToneBadge label={label} tone={tone} />}
     >
@@ -30,7 +30,7 @@ export default function RefreshResultCard({ result }) {
           {result.recommendations ? (
             <RecommendationStepPanel step={result.recommendations} modelRunId={result.stockout?.model_run_id} />
           ) : (
-            <p className="text-xs text-muted-foreground">The backend did not report a recommendation step for this run.</p>
+            <p className="text-xs text-muted-foreground">No recommendation step was reported for this update.</p>
           )}
         </div>
         <p className="text-xs text-muted-foreground">Other pages reload their data automatically.</p>

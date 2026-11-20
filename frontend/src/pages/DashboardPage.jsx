@@ -10,7 +10,8 @@ import StockoutRiskTable from '@/components/dashboard/StockoutRiskTable'
 import TopPurchaseTable from '@/components/dashboard/TopPurchaseTable'
 import QuickActions from '@/components/dashboard/QuickActions'
 import { DASHBOARD_REFETCH_MS, useDashboardSummary, usePurchaseOrders, useRecommendations, useStockoutRisks } from '@/api/hooks'
-import { EM_DASH, formatNumber, greetingForHour } from '@/lib/format'
+import { useAuth } from '@/auth/AuthProvider'
+import { EM_DASH, firstName, formatNumber, greetingForHour } from '@/lib/format'
 
 const POLL = { refetchInterval: DASHBOARD_REFETCH_MS }
 /** Rows in the "most urgent stockout alerts" table. */
@@ -42,6 +43,7 @@ function NoPredictionsCard() {
  * Every number comes from the backend.
  */
 export default function DashboardPage() {
+  const { user } = useAuth()
   const summaryQuery = useDashboardSummary(POLL)
   const topRisks = useStockoutRisks({ limit: TOP_ALERTS }, POLL)
   const topPurchases = useRecommendations({ action: 'PURCHASE', limit: 5 }, POLL)
@@ -68,7 +70,7 @@ export default function DashboardPage() {
       {/* Greeting + last-updated card */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-[1.65rem] font-semibold tracking-tight text-foreground">{greetingForHour()}</h1>
+          <h1 className="text-[1.65rem] font-semibold tracking-tight text-foreground">{greetingForHour(undefined, firstName(user?.name))}</h1>
           <p className="mt-1 text-sm text-muted-foreground">Here is what needs your attention: items likely to run out, and what to order next.</p>
         </div>
         <LastUpdatedCard timestamp={summary?.latest_prediction_timestamp} loading={summaryLoading} />

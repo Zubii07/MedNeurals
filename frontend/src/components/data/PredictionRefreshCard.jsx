@@ -14,17 +14,16 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import StatTile from '@/components/common/StatTile'
 import SectionCard from '@/components/product/SectionCard'
 import RefreshResultCard from '@/components/data/RefreshResultCard'
 import { usePredictionStatus, useRefreshPredictions } from '@/api/hooks'
 import { errorMessage } from '@/api/client'
 import { useElapsedSeconds } from '@/hooks/use-elapsed-seconds'
-import { formatDate, formatDateTime, formatElapsed, formatNumber, runLabel } from '@/lib/format'
+import { formatDateTime, formatElapsed, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /**
- * "Run prediction refresh" (§7.11 step 2): confirm dialog → POST /predictions/refresh (~70 s) with an elapsed-time
+ * "Update predictions" (§7.11 step 2): confirm dialog → POST /predictions/refresh (~70 s) with an elapsed-time
  * indicator and a disabled button → result card. The hook invalidates every query on success (§5.4).
  */
 export default function PredictionRefreshCard() {
@@ -41,72 +40,64 @@ export default function PredictionRefreshCard() {
         if (step?.status === 'failed') {
           toast.warning('Predictions saved, but recommendations failed', { description: step.error || undefined })
         } else {
-          toast.success('Prediction refresh completed', {
-            description: `Run ${runLabel(data.stockout?.model_run_id)} · ${formatNumber(data.forecast_count)} forecasts · ${formatNumber(data.stockout_count)} stockout predictions`,
+          toast.success('Predictions updated', {
+            description: `${formatNumber(data.forecast_count)} weekly forecasts · ${formatNumber(data.stockout_count)} stockout risks`,
           })
         }
       },
-      onError: (error) => toast.error('Prediction refresh failed', { description: errorMessage(error) }),
+      onError: (error) => toast.error('Update failed', { description: errorMessage(error) }),
     })
 
   return (
     <div className={cn('space-y-6', !refresh.isSuccess && 'h-full')}>
       <SectionCard
         icon={RefreshCw}
-        title="Run prediction refresh"
-        description="Runs both ML models on the latest inventory date and generates recommendations."
+        title="Step 2 · Update predictions"
+        description="Recalculates the forecasts, stockout risks and recommendations from the latest uploaded data."
         className={cn(!refresh.isSuccess && 'h-full')}
         contentClassName="flex flex-1 flex-col gap-4"
       >
-        <div className="grid grid-cols-2 gap-2">
-          <StatTile label="Last completed" value={last ? formatDateTime(last.completed_at) : 'No run yet'} className="[&>div:nth-child(2)]:text-sm" />
-          <StatTile
-            label="Last run"
-            value={last ? `${runLabel(last.demand_forecast?.model_run_id)} · ${runLabel(last.stockout?.model_run_id)}` : '—'}
-            hint={last ? `cutoff ${formatDate(last.data_cutoff_date)}` : undefined}
-            className="[&>div:nth-child(2)]:text-sm"
-          />
-        </div>
-
-        <p className="text-xs text-muted-foreground">Takes about a minute and writes to the database. Earlier runs are kept; every page reloads afterwards.</p>
+        <p className="text-sm text-muted-foreground">
+          {last ? `Last updated ${formatDateTime(last.completed_at)}.` : 'Not updated yet.'} Takes about a minute; every page shows the new results afterwards.
+        </p>
 
         <div className="mt-auto flex flex-col gap-3 sm:flex-row sm:items-center">
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button type="button" className="w-full sm:w-auto" disabled={refresh.isPending || importing}>
                 {refresh.isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}
-                {refresh.isPending ? 'Running…' : 'Run prediction refresh'}
+                {refresh.isPending ? 'Updating…' : 'Update predictions'}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Run prediction refresh?</AlertDialogTitle>
+                <AlertDialogTitle>Update the predictions now?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This runs both ML models on the latest data and takes about a minute. It writes new prediction runs and recommendations to the
-                  database.
+                  This recalculates the forecasts, stockout risks and recommendations from the latest uploaded data. It takes about a minute, and
+                  every page shows the new results afterwards.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={start}>Run refresh</AlertDialogAction>
+                <AlertDialogAction onClick={start}>Update now</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
 
           {refresh.isPending ? (
             <p aria-live="polite" className="text-xs text-muted-foreground">
-              <span className="font-medium text-foreground tabular-nums">{formatElapsed(elapsed)}</span> elapsed · usually about 70 seconds. Please keep this
-              page open.
+              <span className="font-medium text-foreground tabular-nums">{formatElapsed(elapsed)}</span> so far · usually about a minute. Please keep this page
+              open.
             </p>
           ) : importing ? (
-            <p className="text-xs text-muted-foreground">Wait for the data import to finish before running a refresh.</p>
+            <p className="text-xs text-muted-foreground">Wait for the upload to finish first.</p>
           ) : null}
         </div>
 
         {refresh.isError ? (
           <Alert variant="destructive" className="border-danger/30">
             <CircleAlert aria-hidden="true" />
-            <AlertTitle>Prediction refresh failed</AlertTitle>
+            <AlertTitle>Update failed</AlertTitle>
             <AlertDescription className="break-words">{errorMessage(refresh.error)}</AlertDescription>
           </Alert>
         ) : null}

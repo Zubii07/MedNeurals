@@ -396,4 +396,41 @@
  * @property {Record<string, unknown>[]} rejected_sample at most 20 rows
  */
 
+/* ------------------------------------------------------------- auth / users */
+
+/** @typedef {'ADMIN' | 'PROCUREMENT_OFFICER'} Role Officers are view only. */
+
+/**
+ * A user account. GET /auth/me, GET /users items, POST /users and PATCH /users/{id} results.
+ * @typedef {Object} User
+ * @property {number} id
+ * @property {string} name
+ * @property {string} email
+ * @property {Role} role
+ * @property {boolean} is_active false = deactivated; the account cannot sign in
+ * @property {ISODateTime} created_at
+ * @property {ISODateTime | null} last_login_at null until the first sign-in
+ */
+
+/**
+ * POST /auth/login result. 401 {detail} for a wrong email/password or a deactivated account.
+ * @typedef {Object} LoginResult
+ * @property {string} access_token bearer JWT, stored in localStorage as `medneurals.token`
+ * @property {'bearer'} token_type
+ * @property {number} expires_in_minutes
+ * @property {User} user
+ */
+
+/** @typedef {{ items: User[] }} UserList GET /users (admin only) */
+
+/**
+ * POST /users body. Password 8–72 characters.
+ * @typedef {{ name: string, email: string, role: Role, password: string }} UserCreate
+ */
+
+/**
+ * PATCH /users/{id} body - any subset of these fields.
+ * @typedef {{ name?: string, email?: string, role?: Role, is_active?: boolean, password?: string }} UserUpdate
+ */
+
 export {}
