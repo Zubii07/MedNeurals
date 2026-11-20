@@ -137,8 +137,8 @@ def weekly_demand(
 ):
     """Weekly demand history of one item for the history-vs-forecast chart: the same daily_inventory.demand_qty totals
     the forecast is built from (app/services/feature_inputs.demand_history), summed per Monday week. Complete weeks
-    only, oldest first, weeks without rows as 0. The central store is excluded: its demand_qty is replenishment of the
-    sub-stores, not consumption."""
+    only, oldest first; a week with no inventory rows at all is null (unrecorded), never 0. The central store is
+    excluded: its demand_qty is replenishment of the sub-stores, not consumption."""
     item = db.get(MedicalItem, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail=f"Product {item_id} not found")
@@ -159,8 +159,10 @@ def weekly_demand(
         WHERE item_id = :item AND {store_filter} AND date BETWEEN :start AND :end
         GROUP BY 1"""), {"item": item_id, "store": store_id or CENTRAL_STORE, "start": first_monday, "end": last_sunday})
     by_week = {r.week_start: float(r.demand_qty) for r in rows}
+    # daily_inventory has a row per day even when nothing was used, so a week without any row is unrecorded, not
+    # zero: it is returned as null and the chart leaves a gap there.
     points = [{"week_start": first_monday + datetime.timedelta(weeks=i),
-               "demand_qty": by_week.get(first_monday + datetime.timedelta(weeks=i), 0.0)} for i in range(weeks)]
+               "demand_qty": by_week.get(first_monday + datetime.timedelta(weeks=i))} for i in range(weeks)]
     return {**base, "end_date": last_sunday, "weeks": points}
 
 

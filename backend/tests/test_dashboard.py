@@ -253,6 +253,12 @@ def test_weekly_demand_returns_complete_monday_weeks(client):
     # a mid-week end date drops the incomplete week; one store filters to that store
     body = client.get("/demand/weekly", params={"item_id": item, "store_id": SUB_STORES[0], "weeks": 4, "end_date": "2025-12-03"}).json()
     assert body["end_date"] == "2025-11-30" and body["store_id"] == SUB_STORES[0] and len(body["weeks"]) == 4
+    # weeks before the first inventory row are unrecorded (null), not zero
+    body = client.get("/demand/weekly", params={"item_id": item, "weeks": 6, "end_date": "2023-01-22"}).json()
+    first_row = q("SELECT min(date) FROM daily_inventory WHERE item_id = :i", i=item)[0][0]
+    assert all((w["demand_qty"] is None) == (datetime.date.fromisoformat(w["week_start"]) + datetime.timedelta(days=6) < first_row)
+               for w in body["weeks"])
+    assert any(w["demand_qty"] is None for w in body["weeks"]) and any(w["demand_qty"] is not None for w in body["weeks"])
     assert client.get("/demand/weekly", params={"item_id": "MED-NOPE"}).status_code == 404
     assert client.get("/demand/weekly", params={"item_id": item, "store_id": "STR-NOPE"}).status_code == 404
 
@@ -265,4 +271,15 @@ def test_forecast_trend_direction_from_horizon_totals():
     assert trend(falling)["direction"] == "decreasing"
     flat = [{"horizon": h, "p50": v} for h, v in zip((1, 2, 3, 4), (100, 101, 100, 102))]
     assert trend(flat)["direction"] == "stable"
+    zigzag = [{"horizon": h, "p50": v} for h, v in zip((1, 2, 3, 4), (100, 115, 95, 118))]   # net rise, but up and down
+    assert trend(zigzag)["direction"] == "mixed"
     assert trend([{"horizon": 1, "p50": 5}]) is None and trend([{"horizon": 1, "p50": 0}, {"horizon": 2, "p50": 0}]) is None
+
+
+def test_forecasts_report_a_trend_for_one_item_and_store(client):
+    _, run = insert_refresh(p50=70)
+    one = client.get("/forecasts", params={"item_id": ITEMS[0], "store_id": SUB_STORES[0]}).json()
+    assert [r["horizon"] for r in one["items"]] == [1, 2, 3, 4]
+    assert one["trend"] == {"direction": "stable", "change_percent": 0.0, "threshold_percent": 5.0}
+    assert client.get("/forecasts", params={"item_id": ITEMS[0]}).json()["trend"] is None            # many series
+    assert client.get("/forecasts", params={"item_id": ITEMS[0], "store_id": SUB_STORES[0], "horizon": 2}).json()["trend"] is None

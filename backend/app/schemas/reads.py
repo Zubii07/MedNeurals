@@ -124,7 +124,7 @@ class SupplierRow(ReadModel):
 
 class WeeklyDemandPoint(BaseModel):
     week_start: datetime.date       # Monday of the week
-    demand_qty: float               # units demanded Mon-Sun (0 when nothing was recorded)
+    demand_qty: float | None        # units demanded Mon-Sun; None when the week has no inventory rows at all
 
 
 class WeeklyDemand(BaseModel):

@@ -130,7 +130,9 @@ def list_forecasts(
         total, rows = _page(conn, FORECAST_QUERY, "f.item_id, f.store_id, f.horizon", {
             "f.model_run_id": run["demand_forecast"]["model_run_id"], "f.item_id": item_id, "f.store_id": store_id,
             "f.horizon": horizon}, page)
-    return {"run": run, "total": total, **page, "items": rows}
+    # One item at one store is a single four-week series, so its direction can be reported with it.
+    trend = forecast_trend(rows) if item_id and store_id and horizon is None and len(rows) >= 2 else None
+    return {"run": run, "total": total, **page, "items": rows, "trend": trend}
 
 
 @router.get("/stockout-risks", response_model=StockoutRiskPage, tags=["predictions"])
@@ -156,9 +158,19 @@ def list_stockout_risks(
 TREND_THRESHOLD_PERCENT = 5.0
 
 
+MIXED_STEP_PERCENT = 1.0
+
+
 def forecast_trend(totals: list[dict], threshold_percent: float = TREND_THRESHOLD_PERCENT) -> dict | None:
-    """Increasing / decreasing / stable from the horizon P50 totals: least-squares slope over the equally spaced
-    weeks, expressed as the change from the first to the last week relative to the mean. Display only."""
+    """Direction of a forecast from its P50 values in horizon order (never from the LLM). Display only.
+
+    Rule: fit a least-squares line through the equally spaced weeks and express its change from the first to the
+    last week as a percentage of the mean weekly forecast.
+      * within +-threshold_percent (5%)      -> "stable"   (tiny changes are ignored)
+      * beyond that, but the week-to-week steps go both up and down by more than MIXED_STEP_PERCENT (1%) of the
+        mean                                 -> "mixed"    (a zig-zag is not called a rise or a fall)
+      * otherwise                            -> "increasing" / "decreasing"
+    """
     values = [float(t["p50"]) for t in sorted(totals, key=lambda t: t["horizon"])]
     n = len(values)
     mean = sum(values) / n if n else 0.0
@@ -167,7 +179,13 @@ def forecast_trend(totals: list[dict], threshold_percent: float = TREND_THRESHOL
     x_mean = (n - 1) / 2
     slope = sum((i - x_mean) * (v - mean) for i, v in enumerate(values)) / sum((i - x_mean) ** 2 for i in range(n))
     change = slope * (n - 1) / mean * 100
-    direction = "increasing" if change > threshold_percent else "decreasing" if change < -threshold_percent else "stable"
+    if abs(change) <= threshold_percent:
+        direction = "stable"
+    else:
+        steps = [(b - a) / mean * 100 for a, b in zip(values, values[1:])]
+        ups = any(s > MIXED_STEP_PERCENT for s in steps)
+        downs = any(s < -MIXED_STEP_PERCENT for s in steps)
+        direction = "mixed" if ups and downs else "increasing" if change > 0 else "decreasing"
     return {"direction": direction, "change_percent": round(change, 1) + 0.0, "threshold_percent": threshold_percent}
 
 

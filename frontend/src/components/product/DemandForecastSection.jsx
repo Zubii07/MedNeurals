@@ -17,16 +17,21 @@ const TREND = {
   increasing: { label: 'Increasing', icon: ArrowUpRight, className: 'bg-info-bg text-[#1d4ed8]' },
   decreasing: { label: 'Decreasing', icon: ArrowDownRight, className: 'bg-muted text-foreground' },
   stable: { label: 'Stable', icon: Minus, className: 'bg-muted text-foreground' },
+  mixed: { label: 'Varies', icon: Minus, className: 'bg-muted text-foreground' },
+}
+
+const SENTENCE = {
+  stable: () => 'Expected demand stays about the same over the next four weeks.',
+  mixed: () => 'Expected demand varies from week to week over the next four weeks.',
+  increasing: (change) => `Expected demand rises by about ${formatDecimal(change, 1)}% from the first to the fourth week.`,
+  decreasing: (change) => `Expected demand falls by about ${formatDecimal(change, 1)}% from the first to the fourth week.`,
 }
 
 function TrendPill({ trend }) {
   if (!trend) return null
   const meta = TREND[trend.direction] ?? TREND.stable
   const Icon = meta.icon
-  const change = Math.abs(trend.change_percent)
-  const sentence = trend.direction === 'stable'
-    ? 'Expected demand stays about the same over the next four weeks.'
-    : `Expected demand ${trend.direction === 'increasing' ? 'rises' : 'falls'} by about ${formatDecimal(change, 1)}% from the first to the fourth week.`
+  const sentence = (SENTENCE[trend.direction] ?? SENTENCE.stable)(Math.abs(trend.change_percent))
   return (
     <p className="flex flex-wrap items-center gap-2 text-sm">
       <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold', meta.className)}>

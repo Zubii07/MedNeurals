@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
  *
  * @param {{ id?: string, value: string, label?: string, onChange: (itemId: string) => void, placeholder?: string, className?: string }} props
  */
-export default function ProductPicker({ id, value, label, onChange, placeholder = 'All items', className }) {
+export default function ProductPicker({ id, value, label, onChange, placeholder = 'All items', className, buttonClassName }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [picked, setPicked] = useState(null)
@@ -50,7 +50,7 @@ export default function ProductPicker({ id, value, label, onChange, placeholder 
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="h-9 min-w-0 flex-1 justify-between bg-card px-3 font-normal"
+            className={cn('h-9 min-w-0 flex-1 justify-between bg-card px-3 font-normal', buttonClassName)}
           >
             <span className={cn('flex min-w-0 items-center gap-2', !display && 'text-muted-foreground')}>
               <Package className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -82,8 +82,10 @@ export default function ProductPicker({ id, value, label, onChange, placeholder 
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium text-foreground">{product.item_name}</span>
                             <span className="block truncate text-xs text-muted-foreground">
-                              {product.item_id} · {product.category_name}
+                              {product.item_id}
+                              {product.sub_category ? ` · ${product.sub_category}` : product.category_name ? ` · ${product.category_name}` : ''}
                               {product.uom ? ` · ${product.uom}` : ''}
+                              {product.uom_per_purchase_pack ? `, pack of ${product.uom_per_purchase_pack}` : ''}
                             </span>
                           </span>
                         </CommandItem>

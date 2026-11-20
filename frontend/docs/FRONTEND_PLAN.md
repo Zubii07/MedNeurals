@@ -839,6 +839,18 @@ small bar), Risk badge, "View analysis". Pagination 25/50/100. Counts above the 
 
 ## 7.5 Forecasts (`/forecasts`)
 
+> **Redesigned on 2026-11-20 for the officer.** A prominent "Search for a product" picker (results show sub-category,
+> unit and pack size) and a Store select; the forecast loads on selection. The store select defaults to the sub-store
+> with the largest four-week expected demand (store P50/P90 are never summed into a hospital-wide figure). One card:
+> "Actual demand and forecast" (`charts/ActualForecastChart`, data merged by `lib/forecast-series`): 12 completed
+> weeks from `GET /demand/weekly` (a week without inventory rows is null and leaves a gap) as a solid blue line, the
+> four P50 weeks as a dashed orange line joined to the last actual, a soft P50–P90 band ("Could be as high as"), a
+> marker labelled "Today" when the period is current or "Forecast starts" otherwise, a one-line summary ("About 12
+> units per week · Demand expected to stay steady") from the backend `trend` now returned by `GET /forecasts` for one
+> item + store (rule in `forecast_trend`, incl. "mixed"), a Chart/Table toggle, and the four weekly "About N" labels.
+> "Past forecast · dates" is shown when the whole period has passed. "Forecast by store" is a collapsed comparison
+> (expected demand only). The database pill is hidden on this route. The original spec below is kept for reference.
+
 - Item picker (search `/products`) and store picker (sub-stores + "All stores").
 - One store: line/bar chart of P50 with a P90 band for H1–H4 (`target_week` on the x-axis) + table.
 - All stores: grouped table (store rows × H1–H4 columns of P50 / P90) from `/forecasts?item_id=…&limit=100`.

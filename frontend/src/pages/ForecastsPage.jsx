@@ -1,112 +1,111 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, TrendingUp } from 'lucide-react'
+import { ArrowRight, Search, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import EmptyState from '@/components/common/EmptyState'
 import ErrorState from '@/components/common/ErrorState'
+import Expandable from '@/components/common/Expandable'
 import NoPredictionsCard from '@/components/common/NoPredictionsCard'
 import PageHeader from '@/components/common/PageHeader'
 import ProductPicker from '@/components/common/ProductPicker'
-import RunFacts from '@/components/common/RunFacts'
-import DemandHistoryChart from '@/components/charts/DemandHistoryChart'
-import ForecastByStoreTable from '@/components/forecasts/ForecastByStoreTable'
+import ActualForecastChart from '@/components/charts/ActualForecastChart'
+import ForecastByStoreChart from '@/components/charts/ForecastByStoreChart'
 import { useForecasts, useWeeklyDemand } from '@/api/hooks'
 import { isNoPredictionRunError } from '@/api/client'
 import { ALL, useUrlFilters } from '@/hooks/use-url-filters'
 import { SUB_STORES, storeName } from '@/lib/enums'
-import { formatDate, formatForecast, horizonLabel } from '@/lib/format'
+import { formatDate, formatNumber, parseDate } from '@/lib/format'
+import { trendMeta, unitWord } from '@/lib/trend'
+import { cn } from '@/lib/utils'
 
 const FILTER_KEYS = ['item_id', 'store_id']
-const HEAD = 'h-9 bg-muted/60 px-2 text-xs font-medium text-muted-foreground first:rounded-l-lg last:rounded-r-lg'
+/** Completed weeks of recorded demand drawn before the four forecast weeks. */
+const HISTORY_WEEKS = 12
+const DAY_MS = 86_400_000
 
-/** Weeks of recorded demand drawn before the four forecast weeks. */
-const HISTORY_WEEKS = 26
+/** The store the chart shows when none is chosen: the one with the largest expected demand over the four weeks. */
+function largestStore(rows) {
+  const totals = new Map()
+  for (const row of rows) totals.set(row.store_id, (totals.get(row.store_id) ?? 0) + (row.p50 ?? 0))
+  let best = null
+  for (const [storeId, total] of totals) if (best == null || total > best.total) best = { storeId, total }
+  return best?.storeId ?? null
+}
 
 /**
- * One store (plan §7.5): one line of weekly demand – the last 26 recorded weeks at this store (GET /demand/weekly)
- * and the four forecast weeks – plus a plain P50 / P90 table. The P90 range is drawn only when switched on.
+ * Whether the four forecast weeks are still ahead. "current": today falls between the week before the first forecast
+ * week and the end of the last one, so the marker reads "Today". "past": the whole period has gone by, so the page
+ * says "Past forecast" with its dates. "future": the forecast has not started yet.
  */
-function StoreForecast({ rows, unit, itemId, storeId, predictionDate }) {
-  const [showRange, setShowRange] = useState(false)
-  const sorted = useMemo(() => [...rows].sort((a, b) => a.horizon - b.horizon), [rows])
-  const history = useWeeklyDemand({ item_id: itemId, store_id: storeId, weeks: HISTORY_WEEKS, end_date: predictionDate ?? undefined }, { enabled: Boolean(predictionDate) })
-
-  let chart
-  if (history.isPending) chart = <Skeleton className="h-[260px] w-full" />
-  else if (history.isError) chart = <ErrorState error={history.error} onRetry={history.refetch} retrying={history.isFetching} compact />
-  else chart = <DemandHistoryChart history={history.data?.weeks ?? []} forecast={sorted} unit={unit} showRange={showRange} />
-
-  return (
-    <div className="space-y-5">
-      {chart}
-      <label className="flex w-fit items-center gap-2 text-sm text-muted-foreground">
-        <Switch checked={showRange} onCheckedChange={setShowRange} aria-label="Show the P90 range" />
-        Show the high estimate (P90) range
-      </label>
-      <Table className="min-w-[480px]">
-        <TableHeader>
-          <TableRow className="border-0 hover:bg-transparent">
-            <TableHead className={HEAD}>Horizon</TableHead>
-            <TableHead className={HEAD}>Week of</TableHead>
-            <TableHead className={`${HEAD} text-right`}>P50{unit ? ` (${unit})` : ''}</TableHead>
-            <TableHead className={`${HEAD} text-right`}>P90{unit ? ` (${unit})` : ''}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sorted.map((row) => (
-            <TableRow key={row.horizon} className="border-border/70">
-              <TableCell className="px-2 py-2.5 text-sm font-medium">{horizonLabel(row.horizon)}</TableCell>
-              <TableCell className="px-2 py-2.5 text-sm">{formatDate(row.target_week)}</TableCell>
-              <TableCell className="px-2 py-2.5 text-right text-sm font-semibold tabular-nums">{formatForecast(row.p50)}</TableCell>
-              <TableCell className="px-2 py-2.5 text-right text-sm tabular-nums text-muted-foreground">{formatForecast(row.p90)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  )
+function forecastTiming(forecastRows, now = new Date()) {
+  const sorted = [...forecastRows].sort((a, b) => a.target_week.localeCompare(b.target_week))
+  if (!sorted.length) return null
+  const start = parseDate(sorted[0].target_week)
+  const lastStart = parseDate(sorted[sorted.length - 1].target_week)
+  if (!start || !lastStart) return null
+  const end = new Date(lastStart.getTime() + 6 * DAY_MS)
+  const status = now > end ? 'past' : now >= new Date(start.getTime() - 7 * DAY_MS) ? 'current' : 'future'
+  return { status, start, end, startIso: sorted[0].target_week }
 }
 
 function ResultSkeleton() {
   return (
-    <div className="space-y-5">
-      <Skeleton className="h-[260px] w-full" />
-      <div className="space-y-3">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-10 w-full" />
-        ))}
-      </div>
-    </div>
+    <Card className="gap-4">
+      <CardContent className="space-y-4">
+        <Skeleton className="h-6 w-1/2" />
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-[300px] w-full" />
+      </CardContent>
+    </Card>
   )
 }
 
 /**
- * Forecasts (`/forecasts`, plan §7.5): pick an item (and optionally a sub-store) to see the latest saved
- * weekly demand forecast for horizons H1–H4. Selection lives in the URL (`item_id`, `store_id`).
+ * Forecasts (`/forecasts`, plan §7.5, redesigned for the officer): search for a product, pick a store, and see one
+ * "Actual demand and forecast" chart with a one-line summary, and a collapsed bar chart comparing all sub-stores. Selection lives in the URL (`item_id`, `store_id`). The chart shows one store at a
+ * time: store P50/P90 values are never summed into a hospital-wide figure.
  */
 export default function ForecastsPage() {
   const { filters, update } = useUrlFilters(FILTER_KEYS)
   const itemId = filters.item_id
-  const storeId = filters.store_id
-  // No placeholder data here: the one-store view and the all-stores view have different shapes.
-  const query = useForecasts({ item_id: itemId, store_id: storeId, limit: 100 }, { enabled: Boolean(itemId) })
+  const chosenStore = filters.store_id
 
-  const rows = query.data?.items ?? []
-  const run = query.data?.run ?? null
-  const first = rows[0]
+  // All stores for the comparison and the default store; then the chosen store's four weeks with their trend.
+  const allQuery = useForecasts({ item_id: itemId, limit: 100 }, { enabled: Boolean(itemId) })
+  const allRows = useMemo(() => allQuery.data?.items ?? [], [allQuery.data])
+  const autoStore = useMemo(() => largestStore(allRows), [allRows])
+  // A store has a forecast only if it stocks (has recorded demand for) the product; only those stores are listed.
+  // Before a product is chosen, or while its rows load, every sub-store is listed.
+  const storesWithForecast = useMemo(() => new Set(allRows.map((row) => row.store_id)), [allRows])
+  const storeOptions = useMemo(
+    () => (itemId && storesWithForecast.size > 0 ? SUB_STORES.filter((store) => storesWithForecast.has(store.store_id)) : SUB_STORES),
+    [itemId, storesWithForecast],
+  )
+  const storeId = chosenStore || autoStore
+  const storeQuery = useForecasts({ item_id: itemId, store_id: storeId, limit: 10 }, { enabled: Boolean(itemId && storeId) })
+  const run = storeQuery.data?.run ?? allQuery.data?.run ?? null
+  const forecastRows = useMemo(() => [...(storeQuery.data?.items ?? [])].sort((a, b) => a.horizon - b.horizon), [storeQuery.data])
+  const history = useWeeklyDemand(
+    { item_id: itemId, store_id: storeId, weeks: HISTORY_WEEKS, end_date: run?.prediction_date },
+    { enabled: Boolean(itemId && storeId && run?.prediction_date) },
+  )
+
+  const first = allRows[0]
   const itemLabel = itemId && first?.item_id === itemId ? first.item_name : undefined
   const unit = first?.unit
+  const unitLabel = unitWord(unit)
+  const timing = useMemo(() => forecastTiming(forecastRows), [forecastRows])
+  const trend = trendMeta(storeQuery.data?.trend)
+  const meanExpected = forecastRows.length ? forecastRows.reduce((sum, row) => sum + row.p50, 0) / forecastRows.length : null
 
-  if (itemId && query.isError && isNoPredictionRunError(query.error)) {
+  if (itemId && allQuery.isError && isNoPredictionRunError(allQuery.error)) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Forecasts" description="Weekly demand for the next four weeks, per sub-store, from the latest saved forecast." />
+        <PageHeader title="Forecasts" description="Search for a product to see how much demand to expect each week, and whether it is rising, falling or steady." />
         <NoPredictionsCard description="Import data and run a prediction refresh to see weekly demand forecasts here." />
       </div>
     )
@@ -114,63 +113,119 @@ export default function ForecastsPage() {
 
   let result
   if (!itemId) {
-    result = <EmptyState icon={TrendingUp} title="Pick an item to see its forecast." description="Search for an item above; choose one sub-store to see its demand line, or keep all stores for the table." />
-  } else if (query.isPending) {
-    result = <ResultSkeleton />
-  } else if (query.isError) {
-    result = <ErrorState error={query.error} onRetry={query.refetch} retrying={query.isFetching} />
-  } else if (rows.length === 0) {
     result = (
-      <EmptyState
-        icon={TrendingUp}
-        title={storeId ? `No forecast for this item at ${storeName(storeId)} in the latest run.` : 'No forecast for this item in the latest run.'}
-        description={storeId ? 'Forecasts exist for the ten sub-stores only. Try another store.' : undefined}
-      />
+      <Card>
+        <EmptyState icon={Search} title="Search for a product to see its forecast." description="Type part of the product name above, for example “chest drain”, and pick the size you need." />
+      </Card>
     )
-  } else if (storeId) {
-    result = <StoreForecast rows={rows} unit={unit} itemId={itemId} storeId={storeId} predictionDate={run?.prediction_date ?? null} />
+  } else if (allQuery.isPending || (storeId && storeQuery.isPending)) {
+    result = <ResultSkeleton />
+  } else if (allQuery.isError || storeQuery.isError) {
+    const failed = allQuery.isError ? allQuery : storeQuery
+    result = (
+      <Card>
+        <ErrorState error={failed.error} onRetry={failed.refetch} retrying={failed.isFetching} />
+      </Card>
+    )
+  } else if (allRows.length === 0) {
+    result = (
+      <Card>
+        <EmptyState icon={TrendingUp} title="No forecast for this product in the latest predictions." description="Forecasts cover the ten sub-stores. This product may have had no recorded demand there." />
+      </Card>
+    )
+  } else if (forecastRows.length === 0) {
+    result = (
+      <Card>
+        <EmptyState
+          icon={TrendingUp}
+          title={`${storeName(storeId)} does not stock this product.`}
+          description={`It is stocked at ${[...storesWithForecast].map(storeName).join(', ')}. Choose one of those stores above.`}
+        />
+      </Card>
+    )
   } else {
-    result = <ForecastByStoreTable rows={rows} unit={unit} />
+    const historyRows = history.data?.weeks ?? []
+    const historyMissing = !history.isPending && (history.isError || historyRows.every((row) => row.demand_qty == null))
+    const markerLabel = timing?.status === 'current' ? 'Today' : 'Forecast starts'
+    result = (
+      <Card className="gap-5">
+        <CardContent className="space-y-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-foreground">Weekly demand</h2>
+              <p className="text-sm text-foreground">
+                <span className="font-medium">{itemLabel ?? itemId}</span>
+                <span className="text-muted-foreground"> · {storeName(storeId)}</span>
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center">
+              <Button asChild variant="ghost" size="sm" className="text-primary hover:bg-accent">
+                <Link to={`/products/${encodeURIComponent(itemId)}`}>
+                  View product analysis
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <p className="text-base font-semibold text-foreground">
+              About {formatNumber(Math.round(meanExpected))} {unitLabel} per week
+              {trend ? <span className="font-normal text-muted-foreground"> · {trend.short}.</span> : null}
+            </p>
+            {timing ? (
+              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', timing.status === 'past' ? 'bg-muted text-muted-foreground' : 'bg-info-bg text-[#1d4ed8]')}>
+                {`Forecast covers ${formatDate(timing.start)} – ${formatDate(timing.end)}`}
+                {timing.status === 'past' ? ' (this period has passed)' : timing.status === 'current' ? ' (the next four weeks)' : ''}
+              </span>
+            ) : null}
+          </div>
+
+          {history.isPending ? (
+            <Skeleton className="h-[300px] w-full" />
+          ) : (
+            <ActualForecastChart history={history.isError ? [] : historyRows} forecast={forecastRows} unit={unit} markerLabel={markerLabel} />
+          )}
+          {historyMissing ? (
+            <p className="text-xs text-muted-foreground">
+              {history.isError ? 'Past weeks could not be loaded; the forecast is shown on its own.' : 'No recorded demand for the past weeks at this store; the forecast is shown on its own.'}
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Forecasts" description="Weekly demand for the next four weeks, per sub-store, from the latest saved forecast.">
-        <RunFacts
-          className="mt-3"
-          loading={Boolean(itemId) && query.isPending}
-          title="Predictions"
-          items={
-            run
-              ? [
-                  { label: 'Made on', value: formatDate(run.prediction_date) },
-                  { label: 'Data up to', value: formatDate(run.data_cutoff_date) },
-                ]
-              : [{ label: 'Details', value: 'shown once an item is selected' }]
-          }
-        />
+      <PageHeader title="Forecasts" description="Search for a product to see how much demand to expect each week, and whether it is rising, falling or steady.">
+        {run ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Data through <span className="font-medium text-foreground">{formatDate(run.data_cutoff_date)}</span>
+          </p>
+        ) : null}
       </PageHeader>
 
       <Card className="gap-4">
         <CardContent>
-          <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end">
-            <div className="min-w-0 flex-1 md:min-w-[18rem]">
-              <Label htmlFor="forecast-item" className="mb-1.5 text-xs text-muted-foreground">
-                Item
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="min-w-0 flex-1">
+              <Label htmlFor="forecast-item" className="mb-1.5 text-sm font-medium text-foreground">
+                Search for a product
               </Label>
-              <ProductPicker id="forecast-item" value={itemId} label={itemLabel} placeholder="Search for an item…" onChange={(next) => update({ item_id: next })} />
+              <ProductPicker id="forecast-item" value={itemId} label={itemLabel} placeholder="Type a product name, e.g. chest drain catheter…" buttonClassName="h-11 text-[15px]" onChange={(next) => update({ item_id: next })} />
             </div>
-            <div>
-              <Label htmlFor="forecast-store" className="mb-1.5 text-xs text-muted-foreground">
+            <div className="md:w-[23rem]">
+              <Label htmlFor="forecast-store" className="mb-1.5 text-sm font-medium text-foreground">
                 Store
               </Label>
-              <Select value={storeId || ALL} onValueChange={(value) => update({ store_id: value })}>
-                <SelectTrigger id="forecast-store" className="h-9 w-full bg-card md:w-[17rem]">
-                  <SelectValue placeholder="All stores" />
+              <Select value={chosenStore || ALL} onValueChange={(value) => update({ store_id: value })}>
+                <SelectTrigger id="forecast-store" className="h-11 w-full bg-card">
+                  <SelectValue placeholder="Store with the highest expected demand" />
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  <SelectItem value={ALL}>All stores</SelectItem>
-                  {SUB_STORES.map((store) => (
+                  <SelectItem value={ALL}>Store with the highest expected demand</SelectItem>
+                  {storeOptions.map((store) => (
                     <SelectItem key={store.store_id} value={store.store_id}>
                       {store.store_name}
                     </SelectItem>
@@ -182,35 +237,13 @@ export default function ForecastsPage() {
         </CardContent>
       </Card>
 
-      <Card className="gap-4">
-        <CardHeader className="gap-0.5">
-          <CardTitle className="min-w-0 text-base font-semibold">
-            {itemId ? (
-              <>
-                <span className="block truncate">{itemLabel ?? itemId}</span>
-                {itemLabel ? <span className="block text-xs font-normal text-muted-foreground">{itemId}</span> : null}
-              </>
-            ) : (
-              'Demand forecast'
-            )}
-          </CardTitle>
-          <CardDescription className="min-w-0 text-xs">
-            {storeId ? `${storeName(storeId)} · the last ${HISTORY_WEEKS} weeks and the next four` : 'All sub-stores · next four weeks, P50 / P90 per store'}
-            {query.isFetching && !query.isPending ? ' · updating…' : ''}
-          </CardDescription>
-          {itemId ? (
-            <CardAction className="self-center">
-              <Button asChild variant="ghost" size="sm" className="text-primary hover:bg-accent">
-                <Link to={`/products/${encodeURIComponent(itemId)}`}>
-                  Product analysis
-                  <ArrowRight aria-hidden="true" />
-                </Link>
-              </Button>
-            </CardAction>
-          ) : null}
-        </CardHeader>
-        <CardContent className="min-w-0">{result}</CardContent>
-      </Card>
+      {result}
+
+      {itemId && allRows.length > 1 ? (
+        <Expandable title="Compare stores" description="Expected demand per week at every sub-store, to see where this product is used most">
+          <ForecastByStoreChart rows={allRows} unit={unit} />
+        </Expandable>
+      ) : null}
     </div>
   )
 }
