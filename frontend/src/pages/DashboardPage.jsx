@@ -71,7 +71,7 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-[1.65rem] font-semibold tracking-tight text-foreground">{greetingForHour(undefined, firstName(user?.name))}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Here is what needs your attention: items likely to run out, and what to order next.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Stock that may run out soon is listed first, then the orders worth placing this week.</p>
         </div>
         <LastUpdatedCard timestamp={summary?.latest_prediction_timestamp} loading={summaryLoading} />
       </div>

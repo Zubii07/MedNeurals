@@ -113,7 +113,7 @@ export default function SuppliersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Suppliers" description="Supplier master data with contract lead time and reliability. Open a supplier for its measured lead time, on-time rate and fill rate." />
+      <PageHeader title="Suppliers" description="Your suppliers and the delivery time agreed in each contract. Open one to see how long deliveries really take and how often they arrive on time and complete." />
 
       <Card className="gap-4">
         <CardContent className="space-y-4">

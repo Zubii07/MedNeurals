@@ -52,7 +52,7 @@ export default function RecommendationsPage() {
   if (query.isError && query.error?.status === 404) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Recommendations" description="Saved purchase, transfer and expedite advice from the rule engine, with priority and reasoning." />
+        <PageHeader title="Recommendations" description="What to buy, move between stores or chase with a supplier, item by item, with the reason for each. Nothing is ordered until you act." />
         <NoPredictionsCard
           title="No recommendations yet"
           description={`${errorMessage(query.error)}. Run a prediction refresh from Data & Predictions to generate the first set.`}
@@ -86,7 +86,7 @@ export default function RecommendationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Recommendations" description="Saved purchase, transfer and expedite advice from the rule engine, with priority and reasoning.">
+      <PageHeader title="Recommendations" description="What to buy, move between stores or chase with a supplier, item by item, with the reason for each. Nothing is ordered until you act.">
         <RunFacts
           className="mt-3"
           title="Recommendation set"

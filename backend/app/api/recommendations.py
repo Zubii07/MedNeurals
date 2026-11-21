@@ -21,11 +21,13 @@ router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 PRIORITY_ORDER = "CASE r.priority WHEN 'HIGH' THEN 0 WHEN 'MODERATE' THEN 1 ELSE 2 END"
 # Saved recommendation rows with their item, store and supplier names; callers add the WHERE clause.
 ROW_QUERY = """
-    SELECT r.*, i.item_name, i.uom, st.store_name, s.supplier_name
+    SELECT r.*, i.item_name, i.uom, st.store_name, s.supplier_name,
+           po.expected_delivery_date AS po_expected_delivery_date, po.receipt_date AS po_receipt_date
     FROM recommendations r
     JOIN medical_items i ON i.item_id = r.item_id
     JOIN suppliers s ON s.supplier_id = r.supplier_id
-    LEFT JOIN stores st ON st.store_id = r.store_id"""
+    LEFT JOIN stores st ON st.store_id = r.store_id
+    LEFT JOIN purchase_orders po ON po.purchase_order_id = r.purchase_order_id"""
 ROW_ORDER = f"{PRIORITY_ORDER}, r.stockout_probability DESC, r.item_id, r.store_id, r.id"
 
 
@@ -41,6 +43,9 @@ def recommendation_row(r) -> dict:
         "details": {
             "current_stock": r["current_stock"], "on_order_qty": r["on_order_qty"],
             "open_po_count": r["open_po_count"], "purchase_order_id": r["purchase_order_id"],
+            # live facts of the PO to expedite (read-only join; not part of the saved recommendation)
+            "purchase_order_expected_delivery_date": r["po_expected_delivery_date"],
+            "purchase_order_received": None if r["purchase_order_id"] is None else r["po_receipt_date"] is not None,
             "daily_demand_p50": round(r["forecast_p50"], 2), "demand_std": round(r["demand_std"], 2),
             "lead_time_days": round(r["lead_time"], 2), "lead_time_std": round(r["lead_time_std"], 2),
             "lead_time_sample_size": r["lead_time_sample_size"], "ved_class": r["ved_class"],

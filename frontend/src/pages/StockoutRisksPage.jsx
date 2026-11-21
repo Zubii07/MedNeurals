@@ -45,7 +45,7 @@ export default function StockoutRisksPage() {
   if (query.isError && isNoPredictionRunError(query.error)) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Stockout Risk Centre" description="Predicted probability that a sub-store runs out of an item within 14 days." />
+        <PageHeader title="Stockout Risk Centre" description="Every item at every store, sorted by how likely it is to run out in the next two weeks." />
         <NoPredictionsCard description="Import data and run a prediction refresh to see store × item stockout risks here." />
       </div>
     )
@@ -117,7 +117,7 @@ export default function StockoutRisksPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Stockout Risk Centre" description="Predicted probability that a sub-store runs out of an item within 14 days, one row per store × item.">
+      <PageHeader title="Stockout Risk Centre" description="Every item at every store, sorted by how likely it is to run out in the next two weeks. Open one to see why and what to do.">
         <RunFacts
           className="mt-3"
           loading={query.isPending}

@@ -17,26 +17,35 @@ const DEFAULT_TIMEOUT_MS = 30_000
 
 /* ------------------------------------------------------------------- auth */
 
-/** localStorage key holding the bearer token from POST /auth/login (stage 6: sign-in and roles). */
+/**
+ * Storage key holding the bearer token from POST /auth/login (stage 6: sign-in and roles).
+ * localStorage when the user ticked "Remember me" (survives closing the browser), sessionStorage otherwise
+ * (ends with the tab).
+ */
 export const TOKEN_STORAGE_KEY = 'medneurals.token'
 
 /** The one path whose 401 means "wrong email or password", not "your session has ended". */
 const LOGIN_PATH = '/auth/login'
 
-/** Stored bearer token, or null when signed out (or when localStorage is unavailable). */
+/** Stored bearer token, or null when signed out (or when web storage is unavailable). */
 export function getToken() {
   try {
-    return window.localStorage.getItem(TOKEN_STORAGE_KEY)
+    return window.localStorage.getItem(TOKEN_STORAGE_KEY) ?? window.sessionStorage.getItem(TOKEN_STORAGE_KEY)
   } catch {
     return null
   }
 }
 
-/** Store the bearer token; `null` removes it. */
-export function setToken(token) {
+/**
+ * Store the bearer token; `null` removes it from both storages.
+ * @param {string | null} token
+ * @param {{ persist?: boolean }} [options] `persist: false` keeps the token for this tab only ("Remember me" unticked)
+ */
+export function setToken(token, { persist = true } = {}) {
   try {
-    if (token) window.localStorage.setItem(TOKEN_STORAGE_KEY, token)
-    else window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+    window.sessionStorage.removeItem(TOKEN_STORAGE_KEY)
+    if (token) (persist ? window.localStorage : window.sessionStorage).setItem(TOKEN_STORAGE_KEY, token)
   } catch {
     // Private mode / blocked storage: the session simply does not survive a reload.
   }

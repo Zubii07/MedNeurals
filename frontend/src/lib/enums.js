@@ -62,7 +62,7 @@ export const PRIORITIES = ['HIGH', 'MODERATE', 'LOW']
 
 export const PRIORITY_META = {
   HIGH: { label: 'High', tone: 'danger' },
-  MODERATE: { label: 'Moderate', tone: 'warning' },
+  MODERATE: { label: 'Medium', tone: 'warning' },
   LOW: { label: 'Low', tone: 'success' },
 }
 

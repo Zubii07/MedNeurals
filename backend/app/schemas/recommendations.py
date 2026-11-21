@@ -37,6 +37,8 @@ class RecommendationDetails(BaseModel):
     on_order_qty: int                     # open purchase orders
     open_po_count: int
     purchase_order_id: str | None         # the PO to expedite (EXPEDITE_PO)
+    purchase_order_expected_delivery_date: datetime.date | None = None   # that PO's expected date (live, read-only)
+    purchase_order_received: bool | None = None                          # True once that PO has a receipt date
     daily_demand_p50: float
     demand_std: float
     lead_time_days: float

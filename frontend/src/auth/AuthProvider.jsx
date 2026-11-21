@@ -6,7 +6,7 @@ import { apiGet, apiPost, getToken, setToken, setUnauthorizedHandler } from '@/a
  * @typedef {Object} AuthState
  * @property {import('@/api/shapes').User | null} user
  * @property {'loading' | 'signed-in' | 'signed-out'} status
- * @property {(email: string, password: string) => Promise<import('@/api/shapes').User>} signIn
+ * @property {(email: string, password: string, options?: { remember?: boolean }) => Promise<import('@/api/shapes').User>} signIn
  * @property {() => void} signOut
  */
 
@@ -58,9 +58,10 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const signIn = useCallback(async (email, password) => {
+  // `remember: false` keeps the token in sessionStorage, so the sign-in ends when the tab is closed.
+  const signIn = useCallback(async (email, password, { remember = true } = {}) => {
     const result = await apiPost('/auth/login', { email, password })
-    setToken(result.access_token)
+    setToken(result.access_token, { persist: remember })
     setUser(result.user)
     setStatus('signed-in')
     return result.user

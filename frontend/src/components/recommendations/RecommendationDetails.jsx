@@ -1,49 +1,116 @@
 import { Link } from 'react-router-dom'
-import StatTile from '@/components/common/StatTile'
-import { EM_DASH, formatDecimal, formatLeadTime, formatNumber, formatProbability, formatQuantity } from '@/lib/format'
+import { ArrowRight } from 'lucide-react'
+import ToneBadge from '@/components/common/ToneBadge'
+import { RECOMMENDATION_STATUS_META, enumMeta, storeName } from '@/lib/enums'
+import { EM_DASH, formatDate, formatNumber, formatProbability, formatQuantity, parseDate } from '@/lib/format'
+import { actionSentence } from '@/lib/recommendation-text'
+import { cn } from '@/lib/utils'
+
+function daysBetween(from, to) {
+  const start = parseDate(from)
+  const end = parseDate(to)
+  if (!start || !end) return null
+  return Math.round((end - start) / 86_400_000)
+}
+
+/** Expected delivery of the PO to chase, judged against the prediction date the advice was made on. */
+function deliveryFact(row) {
+  const d = row.details ?? {}
+  if (!d.purchase_order_id) return null
+  if (d.purchase_order_received) return { label: 'Expected delivery', value: 'Already received' }
+  const date = d.purchase_order_expected_delivery_date
+  if (!date) return { label: 'Expected delivery', value: 'Not known' }
+  const days = daysBetween(row.prediction_date, date)
+  let note = ''
+  let tone
+  if (days != null && days < 0) {
+    note = `overdue by ${formatNumber(-days)} day${days === -1 ? '' : 's'}`
+    tone = 'danger'
+  } else if (days === 0) note = 'due on the prediction date'
+  else if (days != null) note = `${formatNumber(days)} day${days === 1 ? '' : 's'} after the prediction date`
+  return { label: 'Expected delivery', value: formatDate(date), note, tone }
+}
+
+/** Only the quantities that matter for this action: never the same number under two names. */
+function factsFor(row) {
+  const d = row.details ?? {}
+  const unit = row.unit
+  const qty = (value) => (value == null ? EM_DASH : value === 0 ? 'None' : formatQuantity(value, unit))
+  const ordered = d.on_order_qty > 0
+    ? { label: 'Already ordered', value: formatQuantity(d.on_order_qty, unit), note: d.open_po_count ? `${formatNumber(d.open_po_count)} open order${d.open_po_count === 1 ? '' : 's'}` : '' }
+    : { label: 'Already ordered', value: 'Nothing on order' }
+  const central = { label: 'Available at central store', value: qty(d.current_stock), tone: d.current_stock === 0 ? 'danger' : undefined }
+  const supplier = { label: 'Supplier', value: d.supplier_name ?? EM_DASH, note: d.supplier_id }
+  const risk = { label: row.action === 'TRANSFER' ? 'Chance this store runs out' : 'Highest chance of running out', value: formatProbability(d.stockout_probability), note: 'within 14 days', tone: d.stockout_probability >= 0.2126 ? 'danger' : undefined }
+
+  switch (row.action) {
+    case 'EXPEDITE_PO':
+      return [central, { ...ordered, label: 'On the order to chase' }, { label: 'Purchase order', value: d.purchase_order_id ?? EM_DASH, mono: true }, deliveryFact(row), supplier, risk].filter(Boolean)
+    case 'PURCHASE': {
+      const packs = d.pack_size > 1 && row.recommended_purchase_quantity % d.pack_size === 0 ? `${formatNumber(row.recommended_purchase_quantity / d.pack_size)} packs of ${formatNumber(d.pack_size)}` : ''
+      return [
+        { label: 'New order recommended', value: formatQuantity(row.recommended_purchase_quantity, unit), note: packs, strong: true },
+        central,
+        ordered,
+        supplier,
+        risk,
+      ]
+    }
+    case 'TRANSFER':
+      return [
+        { label: `Move to ${row.store_name ?? storeName(row.store_id)}`, value: formatQuantity(row.transfer_quantity, unit), strong: true },
+        central,
+        risk,
+      ]
+    default:
+      return [central, ordered, risk]
+  }
+}
 
 /**
- * Expanded recommendation row (plan §7.3, reduced to the inputs that explain the advice): the full `reason`
- * and tiles for central stock, on order, the PO to expedite, daily demand, lead time, stockout probability and
- * supplier. The remaining model inputs (std, z, VED, pack size, MOQ, safety stock, order-up-to level) stay on the
- * Product Analysis page. Display only – nothing is computed here.
+ * Expanded recommendation (plan §7.3, officer view): the action in one sentence, why in plain words, and one short
+ * list of the quantities that matter for this action, the supplier, the purchase order and its delivery date when
+ * relevant, and the saved status. Reorder points, inventory position, demand and lead-time statistics stay in the
+ * backend. Display only – nothing is computed here beyond date differences and pack arithmetic for display.
  * @param {{ row: import('@/api/shapes').RecommendationRow }} props
  */
 export default function RecommendationDetails({ row }) {
-  const d = row.details ?? {}
-  const unit = row.unit
-  const openPoHint = d.open_po_count != null ? `${formatNumber(d.open_po_count)} open PO${d.open_po_count === 1 ? '' : 's'}` : undefined
+  const status = enumMeta(RECOMMENDATION_STATUS_META, row.status)
+  const facts = factsFor(row)
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <div className="min-w-0">
-        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Reason</h3>
-        <p className="rounded-xl border border-border/70 bg-card px-4 py-3 text-sm leading-relaxed whitespace-normal text-foreground">{row.reason}</p>
-      </div>
-      <div className="min-w-0">
-        <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Inputs behind it</h3>
-        <div className="grid grid-cols-2 gap-2 whitespace-normal sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-3">
-          <StatTile label="Current central stock" value={formatQuantity(d.current_stock, unit)} tone={d.current_stock === 0 ? 'danger' : undefined} />
-          <StatTile label="On order" value={formatQuantity(d.on_order_qty, unit)} hint={openPoHint} />
-          {d.purchase_order_id ? <StatTile label="PO to expedite" value={<span className="font-mono">{d.purchase_order_id}</span>} /> : null}
-          <StatTile label="Daily demand P50" value={d.daily_demand_p50 != null ? `${formatDecimal(d.daily_demand_p50, 1)} ${unit ?? ''}`.trim() : EM_DASH} />
-          <StatTile label="Lead time" value={d.lead_time_days != null ? formatLeadTime(d.lead_time_days, d.lead_time_std, d.lead_time_sample_size) : EM_DASH} />
-          <StatTile label="Stockout probability" value={formatProbability(d.stockout_probability)} tone={d.stockout_probability != null && d.stockout_probability >= 0.2126 ? 'danger' : undefined} />
-          <StatTile
-            label="Supplier"
-            value={
-              d.supplier_id ? (
-                <Link to={`/suppliers/${d.supplier_id}`} className="hover:text-primary hover:underline">
-                  {d.supplier_name ?? d.supplier_id}
-                </Link>
-              ) : (
-                EM_DASH
-              )
-            }
-            hint={d.supplier_name && d.supplier_id ? d.supplier_id : undefined}
-          />
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="min-w-0 space-y-5">
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Recommended action</p>
+          <p className="mt-1 text-base font-semibold text-foreground">{actionSentence(row)}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Why</p>
+          <p className="mt-1 text-sm leading-relaxed text-foreground">{row.reason}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <span className="inline-flex items-center gap-2 text-muted-foreground">
+            Status <ToneBadge label={status.label} tone={status.tone} icon={null} />
+          </span>
+          <Link to={`/products/${encodeURIComponent(row.product_id)}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+            Open product
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
         </div>
       </div>
+
+      <dl className="min-w-0 divide-y divide-border/60 rounded-xl border border-border/70 bg-card px-4">
+        {facts.map((fact) => (
+          <div key={fact.label} className="flex items-start justify-between gap-4 py-2.5">
+            <dt className="text-sm text-muted-foreground">{fact.label}</dt>
+            <dd className="text-right">
+              <span className={cn('block text-sm font-semibold tabular-nums', fact.tone === 'danger' ? 'text-danger' : 'text-foreground', fact.mono && 'font-mono', fact.strong && 'text-base')}>{fact.value}</span>
+              {fact.note ? <span className={cn('block text-xs', fact.tone === 'danger' ? 'text-danger' : 'text-muted-foreground')}>{fact.note}</span> : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }
