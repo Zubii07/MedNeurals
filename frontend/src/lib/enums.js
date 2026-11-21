@@ -68,7 +68,7 @@ export const PRIORITY_META = {
 
 /* ---------------------------------------------------- recommendation status */
 
-/** Only PENDING exists until backend Phase 11 adds accept / adjust / reject. */
+/** PENDING until a procurement officer decides; the other three mirror the officer's decision (Phase 11). */
 export const RECOMMENDATION_STATUSES = ['PENDING', 'ACCEPTED', 'ADJUSTED', 'REJECTED']
 
 export const RECOMMENDATION_STATUS_META = {
@@ -80,7 +80,7 @@ export const RECOMMENDATION_STATUS_META = {
 
 /* ------------------------------------------------------------------ roles */
 
-/** User roles (stage 6). Officers are view only; administrators also import data, run predictions and manage users. */
+/** User roles (stage 6). Officers decide on recommendations; administrators import data, run predictions, manage users and read every decision. */
 export const ROLES = ['ADMIN', 'PROCUREMENT_OFFICER']
 
 export const ROLE_META = {
@@ -194,3 +194,6 @@ export function enumMeta(meta, value) {
   return meta[value] ?? { label: value ?? EM_DASH, tone: 'neutral' }
 }
 
+
+/** The only role that can accept, adjust or reject a recommendation (the backend checks it too). */
+export const OFFICER_ROLE = 'PROCUREMENT_OFFICER'

@@ -299,8 +299,38 @@
  * @property {string} supplier_name
  */
 
+/** @typedef {'ACCEPTED' | 'ADJUSTED' | 'REJECTED'} Decision */
+
 /**
- * GET /recommendations row. `store_id`/`store_name` are set for TRANSFER rows only.
+ * The officer's final decision on one recommendation row (Phase 11). Original values were copied when the decision
+ * was made; quantities belong to PURCHASE / TRANSFER rows, dates to EXPEDITE_PO rows.
+ * @typedef {Object} RecommendationDecision
+ * @property {number} id
+ * @property {number} recommendation_id
+ * @property {Decision} decision
+ * @property {number} decided_by_id
+ * @property {string} decided_by_name
+ * @property {ISODateTime} decided_at
+ * @property {number | null} original_quantity
+ * @property {number | null} adjusted_quantity
+ * @property {ISODate | null} original_expected_date
+ * @property {ISODate | null} adjusted_expected_date
+ * @property {string | null} reason
+ */
+
+/**
+ * GET /recommendations/decisions row: a decision with the recommendation it was made on.
+ * @typedef {RecommendationDecision & {
+ *   product_id: string, product_name: string, unit: string, store_id: string | null, store_name: string | null,
+ *   action: Action, priority: Priority, recommended_purchase_quantity: number, transfer_quantity: number,
+ *   purchase_order_id: string | null, model_run_id: number, prediction_date: ISODate
+ * }} DecisionHistoryRow
+ */
+
+/** @typedef {Page<DecisionHistoryRow>} DecisionHistoryPage */
+
+/**
+ * GET /recommendations row. `store_id`/`store_name` are set for TRANSFER rows only. `decision` is null while PENDING.
  * @typedef {Object} RecommendationRow
  * @property {number} id
  * @property {string} product_id
@@ -318,6 +348,7 @@
  * @property {number} inventory_position
  * @property {string} reason
  * @property {RecommendationStatus} status
+ * @property {RecommendationDecision | null} decision
  * @property {RecommendationDetails} details
  * @property {number} model_run_id
  * @property {number} demand_model_run_id
@@ -328,10 +359,13 @@
 
 /**
  * GET /recommendations page. `freshness === 'stale'` means a newer prediction run exists without its own set.
+ * `is_latest_set` is false for an older set, whose rows can no longer be decided. `status_counts` covers the
+ * whole set, whatever the filters.
  * @typedef {Page<RecommendationRow> & {
  *   model_run_id: number, generated_at: ISODateTime, latest_prediction_run_id: number | null,
  *   latest_prediction_date: ISODate | null, freshness: 'current' | 'stale', demand_model_run_id: number,
- *   prediction_date: ISODate, data_cutoff_date: ISODate
+ *   prediction_date: ISODate, data_cutoff_date: ISODate, is_latest_set: boolean,
+ *   status_counts: Record<RecommendationStatus, number>
  * }} RecommendationPage
  */
 

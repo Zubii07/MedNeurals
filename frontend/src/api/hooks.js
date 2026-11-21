@@ -85,6 +85,39 @@ export function useRecommendations(params = {}, options) {
   })
 }
 
+/**
+ * POST /recommendations/{id}/decision → RecommendationRow with its `decision` (Phase 11, officers only). Records
+ * Accept / Adjust / Reject; nothing is ordered or moved. 403 for an admin, 409 when the row was already decided or
+ * belongs to an older set, 422 when the value does not fit the row (reason missing, quantity on an expedite, …).
+ * Recommendation lists, the product page and the dashboard reload afterwards.
+ * @returns mutation taking `{ id: number, decision: 'ACCEPTED' | 'ADJUSTED' | 'REJECTED', adjusted_quantity?: number, adjusted_expected_date?: string, reason?: string }`
+ */
+export function useDecideRecommendation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ['recommendations', 'decide'],
+    mutationFn: ({ id, ...body }) => apiPost(`/recommendations/${encodeURIComponent(id)}/decision`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] })
+      queryClient.invalidateQueries({ queryKey: ['products', 'analysis'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+/**
+ * GET /recommendations/decisions → DecisionHistoryPage: officer decisions across every recommendation set, newest
+ * first (both roles). The detail panel asks for one item (and store) to show what was decided in earlier weeks.
+ * @param {{ item_id?: string, store_id?: string, decision?: string, action?: string, user_id?: number, limit?: number, offset?: number }} [params]
+ */
+export function useRecommendationDecisions(params = {}, options) {
+  return useQuery({
+    queryKey: ['recommendations', 'decisions', params],
+    queryFn: ({ signal }) => apiGet('/recommendations/decisions', params, { signal }),
+    ...options,
+  })
+}
+
 /* -------------------------------------------------- inventory & orders */
 
 /**

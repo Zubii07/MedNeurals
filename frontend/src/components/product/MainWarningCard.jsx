@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/card'
-import { ActionBadge, PriorityBadge, RiskBadge } from '@/components/common/ToneBadge'
+import ToneBadge, { ActionBadge, PriorityBadge, RiskBadge } from '@/components/common/ToneBadge'
 import AiSummary from './AiSummary'
-import { formatNumber, formatProbability, formatQuantity } from '@/lib/format'
+import { RECOMMENDATION_STATUS_META, enumMeta } from '@/lib/enums'
+import { formatDateTime, formatNumber, formatProbability, formatQuantity } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const ACCENT = {
@@ -101,7 +102,18 @@ export default function MainWarningCard({ analysis }) {
                 Plus {formatNumber(transfers.length)} transfer{transfers.length === 1 ? '' : 's'} between stores, {formatQuantity(transferTotal, unit)} in total. Details below.
               </p>
             ) : null}
-            <p className="mt-2 text-[11px] text-muted-foreground">Advisory only. You decide whether to act on it.</p>
+            {itemRow?.decision ? (
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                <ToneBadge label={enumMeta(RECOMMENDATION_STATUS_META, itemRow.status).label} tone={enumMeta(RECOMMENDATION_STATUS_META, itemRow.status).tone} icon={null} />
+                <span>
+                  by {itemRow.decision.decided_by_name} on {formatDateTime(itemRow.decision.decided_at)}
+                  {itemRow.decision.adjusted_quantity != null ? `; decided ${formatQuantity(itemRow.decision.adjusted_quantity, unit)}` : ''}
+                  {itemRow.decision.reason ? ` – “${itemRow.decision.reason}”` : ''}
+                </span>
+              </p>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted-foreground">Advisory only. A procurement officer decides on the Recommendations page.</p>
+            )}
           </>
         ) : recMissing ? (
           <p className="mt-2 text-sm text-muted-foreground">

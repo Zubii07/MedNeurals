@@ -10,6 +10,7 @@ from app.models.master import (
     SupplierItem,
     UnitOfMeasure,
 )
+from app.models.decisions import RecommendationDecision
 from app.models.explanations import RecommendationExplanation
 from app.models.predictions import ForecastPrediction, ModelRun, StockoutPrediction
 from app.models.recommendations import Recommendation
@@ -30,6 +31,7 @@ __all__ = [
     "ModelRun",
     "PurchaseOrder",
     "Recommendation",
+    "RecommendationDecision",
     "RecommendationExplanation",
     "StockTransfer",
     "StockoutEvent",

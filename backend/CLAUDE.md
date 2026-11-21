@@ -32,10 +32,16 @@ FastAPI · PostgreSQL · SQLAlchemy 2 · Alembic · pandas · scikit-learn · jo
 9. Keep it simple: no new frameworks, layers or abstractions unless the plan asks for them. Add only dependencies the phase needs.
 
 ## Auth (Phase 11)
-- Two roles: `ADMIN` (accounts, imports, prediction refresh, recommendation generation) and `PROCUREMENT_OFFICER`
-  (read everything). Bearer JWT from `POST /auth/login`; `GET /auth/me`; `/health*` and login are the only public routes.
+- Two roles: `ADMIN` (accounts, imports, prediction refresh, recommendation generation; reads every decision) and
+  `PROCUREMENT_OFFICER` (reads everything; the only role that decides on recommendations). Bearer JWT from
+  `POST /auth/login`; `GET /auth/me`; `/health*` and login are the only public routes.
 - Every data router is included with `dependencies=[Depends(get_current_user)]` in `app/main.py`. A new admin-only
-  route adds `dependencies=[Depends(require_admin)]` on its decorator (`app/api/deps.py`). Users: `app/api/users.py`.
+  route adds `dependencies=[Depends(require_admin)]` on its decorator (`app/api/deps.py`); officer-only routes use
+  `require_officer`. Users: `app/api/users.py`.
+- Officer actions: `POST /recommendations/{id}/decision` (ACCEPTED / ADJUSTED / REJECTED) writes one final row in
+  `recommendation_decisions` (unique per recommendation; original and adjusted quantity or delivery date, reason,
+  officer, time) and sets `recommendations.status` in the same transaction. Only rows of the latest recommendation
+  set can be decided; older sets stay as they are. `GET /recommendations/decisions` is the history.
 - First administrator: `python -m scripts.create_admin` (prompts; prints nothing secret). Accounts are deactivated, never deleted.
 - Tests get a fake admin through `tests/conftest.py`; mark a test `real_auth` to exercise the real token check.
 

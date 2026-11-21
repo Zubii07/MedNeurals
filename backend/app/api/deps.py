@@ -4,6 +4,7 @@
   dependency in app/main.py, and tests override it (tests/conftest.py).
 - require_admin: chains through get_current_user and answers 403 for any other role, so the test override covers the
   admin routes too.
+- require_officer: the same for PROCUREMENT_OFFICER; only officers decide on recommendations (Accept / Adjust / Reject).
 """
 
 from fastapi import Depends, HTTPException
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import TokenError, decode_access_token
 from app.database.connection import get_db
-from app.models.user import ROLE_ADMIN, User
+from app.models.user import ROLE_ADMIN, ROLE_OFFICER, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -41,4 +42,10 @@ def get_current_user(
 def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != ROLE_ADMIN:
         raise HTTPException(status_code=403, detail="Administrators only")
+    return user
+
+
+def require_officer(user: User = Depends(get_current_user)) -> User:
+    if user.role != ROLE_OFFICER:
+        raise HTTPException(status_code=403, detail="Procurement officers only")
     return user

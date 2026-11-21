@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import ToneBadge from '@/components/common/ToneBadge'
-import { RECOMMENDATION_STATUS_META, enumMeta, storeName } from '@/lib/enums'
+import DecisionPanel from './DecisionPanel'
+import { storeName } from '@/lib/enums'
 import { EM_DASH, formatDate, formatNumber, formatProbability, formatQuantity, parseDate } from '@/lib/format'
 import { actionSentence } from '@/lib/recommendation-text'
 import { cn } from '@/lib/utils'
@@ -70,12 +70,12 @@ function factsFor(row) {
 /**
  * Expanded recommendation (plan §7.3, officer view): the action in one sentence, why in plain words, and one short
  * list of the quantities that matter for this action, the supplier, the purchase order and its delivery date when
- * relevant, and the saved status. Reorder points, inventory position, demand and lead-time statistics stay in the
- * backend. Display only – nothing is computed here beyond date differences and pack arithmetic for display.
- * @param {{ row: import('@/api/shapes').RecommendationRow }} props
+ * relevant, and the officer's decision (Accept | Adjust | Reject while pending, DecisionPanel). Reorder points,
+ * inventory position, demand and lead-time statistics stay in the backend. Display only – nothing is computed here
+ * beyond date differences and pack arithmetic for display.
+ * @param {{ row: import('@/api/shapes').RecommendationRow, isLatestSet?: boolean }} props
  */
-export default function RecommendationDetails({ row }) {
-  const status = enumMeta(RECOMMENDATION_STATUS_META, row.status)
+export default function RecommendationDetails({ row, isLatestSet = true }) {
   const facts = factsFor(row)
 
   return (
@@ -89,15 +89,11 @@ export default function RecommendationDetails({ row }) {
           <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Why</p>
           <p className="mt-1 text-sm leading-relaxed text-foreground">{row.reason}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span className="inline-flex items-center gap-2 text-muted-foreground">
-            Status <ToneBadge label={status.label} tone={status.tone} icon={null} />
-          </span>
-          <Link to={`/products/${encodeURIComponent(row.product_id)}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
-            Open product
-            <ArrowRight className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
+        <DecisionPanel row={row} isLatestSet={isLatestSet} />
+        <Link to={`/products/${encodeURIComponent(row.product_id)}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+          Open product
+          <ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
       </div>
 
       <dl className="min-w-0 divide-y divide-border/60 rounded-xl border border-border/70 bg-card px-4">

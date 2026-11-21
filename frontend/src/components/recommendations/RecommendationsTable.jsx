@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import ToneBadge, { ActionBadge, PriorityBadge } from '@/components/common/ToneBadge'
 import RecommendationDetails from './RecommendationDetails'
 import { RECOMMENDATION_STATUS_META, enumMeta, storeName } from '@/lib/enums'
+import { formatDateTime } from '@/lib/format'
 import { actionShort } from '@/lib/recommendation-text'
 import { cn } from '@/lib/utils'
 
@@ -15,10 +16,10 @@ const COLUMN_COUNT = 6
 /**
  * Recommendations list (plan §7.3, officer view): priority, product, action with its short form, store and status.
  * Rows arrive most urgent first (the API orders by priority, then stockout chance). A click expands the row into
- * the detail panel; reorder points, inventory position and model inputs are not shown.
- * @param {{ rows: import('@/api/shapes').RecommendationRow[] }} props
+ * the detail panel, where an officer decides; reorder points, inventory position and model inputs are not shown.
+ * @param {{ rows: import('@/api/shapes').RecommendationRow[], isLatestSet?: boolean }} props
  */
-export default function RecommendationsTable({ rows }) {
+export default function RecommendationsTable({ rows, isLatestSet = true }) {
   const [expanded, setExpanded] = useState(() => new Set())
   // The table scrolls horizontally on small screens; the expanded panel is pinned to the visible width instead.
   const containerRef = useRef(null)
@@ -108,13 +109,18 @@ export default function RecommendationsTable({ rows }) {
                   </TableCell>
                   <TableCell className="px-2 py-3">
                     <ToneBadge label={status.label} tone={status.tone} icon={null} className="px-2" />
+                    {row.decision ? (
+                      <span className="mt-1 block max-w-[160px] truncate text-xs text-muted-foreground" title={`${row.decision.decided_by_name}, ${formatDateTime(row.decision.decided_at)}`}>
+                        {row.decision.decided_by_name}
+                      </span>
+                    ) : null}
                   </TableCell>
                 </TableRow>
                 {open ? (
                   <TableRow id={detailsId} className="border-border/70 bg-muted/20 hover:bg-muted/20">
                     <TableCell colSpan={COLUMN_COUNT} className="p-0 whitespace-normal">
                       <div className="sticky left-0 px-4 pt-1 pb-5 sm:px-6" style={viewportWidth ? { width: viewportWidth } : undefined}>
-                        <RecommendationDetails row={row} />
+                        <RecommendationDetails row={row} isLatestSet={isLatestSet} />
                       </div>
                     </TableCell>
                   </TableRow>

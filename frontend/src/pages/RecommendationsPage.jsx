@@ -18,7 +18,7 @@ import { useRecommendations } from '@/api/hooks'
 import { errorMessage } from '@/api/client'
 import { ALL, useUrlFilters } from '@/hooks/use-url-filters'
 import { ACTIONS, ACTION_META, PRIORITIES, PRIORITY_META, RECOMMENDATION_STATUSES, RECOMMENDATION_STATUS_META, SUB_STORES } from '@/lib/enums'
-import { formatDate, formatDateTime, formatNumber } from '@/lib/format'
+import { EM_DASH, formatDate, formatDateTime, formatNumber } from '@/lib/format'
 
 const FILTER_KEYS = ['action', 'priority', 'status', 'store_id', 'item_id']
 
@@ -48,6 +48,9 @@ export default function RecommendationsPage() {
   const hasAnyFilter = hasFilters || Boolean(filters.action)
   const itemLabel = filters.item_id && rows.length && rows[0].product_id === filters.item_id ? rows[0].product_name : undefined
   const stale = page?.freshness === 'stale'
+  const counts = page?.status_counts
+  const setSize = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : 0
+  const reviewed = counts ? setSize - (counts.PENDING ?? 0) : 0
 
   if (query.isError && query.error?.status === 404) {
     return (
@@ -81,7 +84,7 @@ export default function RecommendationsPage() {
       />
     )
   } else {
-    body = <RecommendationsTable rows={rows} />
+    body = <RecommendationsTable rows={rows} isLatestSet={page?.is_latest_set ?? true} />
   }
 
   return (
@@ -96,6 +99,7 @@ export default function RecommendationsPage() {
             { label: 'Predictions made on', value: formatDate(page?.prediction_date) },
             { label: 'Data up to', value: formatDate(page?.data_cutoff_date) },
             { label: 'Generated', value: formatDateTime(page?.generated_at) },
+            { label: 'Reviewed', value: counts ? `${formatNumber(reviewed)} of ${formatNumber(setSize)}` : EM_DASH },
           ]}
         />
       </PageHeader>
@@ -208,7 +212,7 @@ export default function RecommendationsPage() {
             <TablePagination total={total} limit={filters.limit} offset={filters.offset} onChange={(next) => update(next, { resetOffset: false })} disabled={query.isFetching} />
           ) : null}
 
-          <p className="text-xs text-muted-foreground">Advisory only – accept, adjust and reject arrive with officer login.</p>
+          <p className="text-xs text-muted-foreground">Advisory only. A procurement officer accepts, adjusts or rejects each recommendation; nothing is ordered or moved automatically.</p>
         </CardContent>
       </Card>
     </div>
